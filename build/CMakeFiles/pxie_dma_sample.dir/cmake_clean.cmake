@@ -1,0 +1,39 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o.d"
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/fifo_engine.cpp.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/fifo_engine.cpp.o.d"
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.o.d"
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/queue.c.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/queue.c.o.d"
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/ringbuffer.c.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/ringbuffer.c.o.d"
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/stream_fifo.c.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/stream_fifo.c.o.d"
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/xutils.c.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/xutils.c.o.d"
+  "CMakeFiles/pxie_dma_sample.dir/src/main.cpp.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/main.cpp.o.d"
+  "CMakeFiles/pxie_dma_sample.dir/src/network/n_event.cpp.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/network/n_event.cpp.o.d"
+  "CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.o.d"
+  "CMakeFiles/pxie_dma_sample.dir/src/network/sync_send.cpp.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/network/sync_send.cpp.o.d"
+  "CMakeFiles/pxie_dma_sample.dir/src/network/tcp_socket.cpp.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/network/tcp_socket.cpp.o.d"
+  "CMakeFiles/pxie_dma_sample.dir/src/network/thread.cpp.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/network/thread.cpp.o.d"
+  "CMakeFiles/pxie_dma_sample.dir/src/system/1553B_engine.c.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/system/1553B_engine.c.o.d"
+  "CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o.d"
+  "pxie_dma_sample"
+  "pxie_dma_sample.pdb"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang C CXX)
+  include(CMakeFiles/pxie_dma_sample.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()

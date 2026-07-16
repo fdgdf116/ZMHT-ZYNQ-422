@@ -1,0 +1,67 @@
+#include "network_main.h"
+#include "fifo_engine.h"
+#include "system.h"
+#include "1553B_engine.h"
+#include "sync_send.h"
+using namespace network;
+
+void prog_exit(int sig_no);
+
+int main(int argc, char* argv[]){
+    int ret;
+
+#if 1
+    signal(SIGPIPE, SIG_IGN);
+    signal(SIGINT, prog_exit);
+    signal(SIGKILL, prog_exit);
+    signal(SIGTERM, prog_exit);
+#else
+    signal(SIGINT, prog_exit);
+#endif
+	ret = init_1553B();
+	if(ret != 0)
+	{
+		printf("recv_dma_init error \n");
+		return ret;
+	}
+
+	ret = recv_dma_init();
+	if(ret != 0)
+	{
+		printf("recv_dma_init error \n");
+		return ret;
+	}
+
+	ret = system_init();
+	if(ret != 0)
+	{
+		printf("system init error \n");
+		return ret;
+	}
+
+	ret = axififo_data_init();
+	if(ret != 0)
+	{
+		printf("axififo_data_init error \n");
+		return ret;
+	}
+
+	SyncSend::GetInstance()->Init();
+	NetServer cmd_server;
+	cmd_server.Init(CMD_PORT);
+	NetServer data_1553b_server;
+	data_1553b_server.Init(DATA_1553B_PORT);
+	NetServer data_server;
+	data_server.Init(DATA_DOWN_PORT);
+
+	while(1) {
+		sleep(1);
+	}
+	return 0;
+}
+void prog_exit(int sig_no){
+	system_exit();
+	recv_dma_exit();
+	exit(0);
+}
+

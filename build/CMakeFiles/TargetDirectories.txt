@@ -1,0 +1,3 @@
+/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles/pxie_dma_sample.dir
+/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles/edit_cache.dir
+/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles/rebuild_cache.dir
