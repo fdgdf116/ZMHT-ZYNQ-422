@@ -6,6 +6,7 @@
 #include "cmd_packet.h"
 namespace network {
 #define DATA_PORT 9014
+#define DATA_PORT_BENCHMARK_MODE 0
 class SyncSend: public EthSend {
 public:
 	static SyncSend* GetInstance();
@@ -18,7 +19,6 @@ public:
 	int SendResponse(Response *response);
 	int SendResponse(ClassResponse *response);
 	int Send(const char* buf, int size);
-	int DmaSend(char * buf, int size, int chn_id);
 private:
 	SyncSend(const char* ip, int port);
 	virtual ~SyncSend();

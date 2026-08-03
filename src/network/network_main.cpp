@@ -78,8 +78,7 @@ void NetServer::DaemodLoop(Thread * thread){
     int ret = 0;
 	while( daemod_thread_.IsInterrupted() == false ){
 		if(client_ == nullptr){
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            printf("1.Cache report client_ is null \n");
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 		} else {
 			if( !client_->IsAlive() ) {
 				printf("-----------------2.Cache report client leaving...\n");
@@ -134,7 +133,8 @@ void NetServer::DataServiceLoop(Thread *thread){
         if(client_==nullptr) {
             client_ = server_->Accept(10);
             if(client_!=nullptr) {
-                client_->SetRecvTimeout(3000);
+				/* Command/data connections may stay idle; keep receive blocking. */
+				client_->SetRecvTimeout(0);
                 client_->SetSendTimeout(3000);
                 client_->set_keepalive(3, 3, 3);
 
@@ -202,7 +202,8 @@ void NetServer::ServiceLoop(Thread *thread){
         if(client_==nullptr) {
             client_ = server_->Accept(10);
             if(client_!=nullptr) {
-                client_->SetRecvTimeout(3000);
+				/* Command connections may stay idle; keep receive blocking. */
+				client_->SetRecvTimeout(0);
                 client_->SetSendTimeout(3000);
                 client_->set_keepalive(3, 3, 3);
 

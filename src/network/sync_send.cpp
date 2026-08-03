@@ -51,71 +51,121 @@ int SyncSend::SendResponse(Response *response){
 }
 int SyncSend::SendResponse(ClassResponse *response){
     Response *res = response->GetResponse();
-    SendResponse(res);
-    return 0;
+    return SendResponse(res);
 }
 
 void SyncSend::DaemodLoop(Thread * thread){
-	int size,chn_id = 0;
-	unsigned char* data_buf = nullptr;//(unsigned char*)malloc(RECV_DMA_DATA_SIZE);
-	// unsigned char* fifo_data_buf = nullptr;
+	(void)thread;
+	int size;
+	unsigned char* data_buf = nullptr;
 	unsigned char** ptr = &data_buf;
-	// unsigned char RecvBuffer[AXIFIFO_RECV_DATA_SIZE];
+	const size_t payload_capacity = RECV_DMA_DATA_SIZE;
+	const size_t packet_capacity =
+		sizeof(Response) + sizeof(uint32_t) + payload_capacity;
+	unsigned char* packet_buffer = (unsigned char*)malloc(packet_capacity);
+	if(packet_buffer == nullptr) {
+		printf("[NET 9014] allocate contiguous packet buffer failed, size: %u\n",
+			   (unsigned int)packet_capacity);
+		return;
+	}
+	Response* response = (Response*)packet_buffer;
+	response->cmd_code = htonl(UP_CODE);
+	response->length = 0;
+	response->count = 0;
+	response->index = htons(0x03);
+	response->time = 0;
+	response->crc = 0;
+	uint32_t* network_channel_id =
+		(uint32_t*)(packet_buffer + sizeof(Response));
+	unsigned char* packet_payload =
+		packet_buffer + sizeof(Response) + sizeof(uint32_t);
+	unsigned long long interval_bytes = 0;
+	std::chrono::steady_clock::time_point rate_start =
+		std::chrono::steady_clock::now();
+	std::chrono::steady_clock::time_point last_alive_check = rate_start;
+	printf("[NET 9014] DMA contiguous-buffer pipeline ready, buffer: %u bytes\n",
+		   (unsigned int)packet_capacity);
+
 	while(!is_interrupt_){
 		if(exc_client_ == nullptr){
-			TcpSocket * client = server_->Accept(10);
-			if(client) {
-				printf("-----------------accept data client......\n");
-				exc_client_ = client;
-				exc_client_->SetRecvTimeout(3000);
+			exc_client_ = server_->Accept(10);
+			if(exc_client_) {
+				printf("[NET 9014] data client connected\n");
+				exc_client_->SetSendBUfSize(4*1024*1024);
 				exc_client_->SetSendTimeout(3000);
 				exc_client_->set_keepalive(200, 60, 20);
+				interval_bytes = 0;
+				rate_start = std::chrono::steady_clock::now();
+				last_alive_check = rate_start;
 			} else {
-				printf("2.data server no accept client connect request!!!!!!\n");
+				printf("[NET 9014] waiting for data client\n");
 			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
-		} else {
-			if( !exc_client_->IsAlive() ) {
-				printf("-----------------2.client leaving...\n");
+			continue;
+		}
+
+		std::chrono::steady_clock::time_point now =
+			std::chrono::steady_clock::now();
+		if(std::chrono::duration<double>(now - last_alive_check).count() >= 1.0) {
+			last_alive_check = now;
+			if(!exc_client_->IsAlive()) {
+				printf("[NET 9014] data client disconnected\n");
 				exc_client_->Close();
+				delete exc_client_;
 				exc_client_ = nullptr;
 				continue;
 			}
-			for(int dma_id = 0; dma_id < SGDMA_NUM; dma_id++)
-			{
-				size = rx_sgdma_data_get(dma_id, ptr);
-				// size = recv_dma(data_buf);
-				if(size > 0) {
-					ClassResponse response(size+4);
-					response.WriteReqcode(UP_CODE);
-					response.WriteType(0x03);
-					chn_id = htonl(dma_id);
-					response.WritePayload(&chn_id, 0, 4);
-					response.WritePayload(data_buf, 4, size);
-					SendResponse(&response);
-					// dma_disable();
-					// printf("send sgdma data_id:%d size = %d\n",dma_id,size);
+		}
+
+		bool did_work = false;
+		bool send_failed = false;
+		for(int dma_id = 0; dma_id < SGDMA_NUM; ++dma_id) {
+			size = rx_sgdma_data_get(dma_id, ptr);
+			if(size > 0) {
+				did_work = true;
+				if((size_t)size > payload_capacity) {
+					printf("[NET 9014] DMA frame too large: %d, buffer: %u\n",
+						   size, (unsigned int)payload_capacity);
+					continue;
 				}
-			}
-			for(int fifo_id = 0; fifo_id < FIFO_NUM; fifo_id++)
-			{
-				size = rx_fifo_data_get(fifo_id, ptr);
-				// size = axififo_recv(fifo_id, RecvBuffer);
-				if(size > 0) {
-					ClassResponse response(size+4);
-					response.WriteReqcode(UP_CODE);
-					response.WriteType(0x06);
-					chn_id = htonl(fifo_id);
-					response.WritePayload(&chn_id, 0, 4);
-					response.WritePayload(data_buf, 4, size);
-					SendResponse(&response);
-					// printf("send fifo_id:%d data size = %d\n",fifo_id,size);
+				response->length = htonl((uint32_t)(sizeof(uint32_t) + size));
+				*network_channel_id = htonl((uint32_t)dma_id);
+				memcpy(packet_payload, data_buf, (size_t)size);
+				int packet_size = sizeof(Response) + sizeof(uint32_t) + size;
+				if(!exc_client_->SendFully(packet_buffer, packet_size)) {
+					printf("[NET 9014] SendFully failed, data client disconnected\n");
+					exc_client_->Close();
+					delete exc_client_;
+					exc_client_ = nullptr;
+					send_failed = true;
+					break;
 				}
+				interval_bytes += packet_size;
 			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+		if(send_failed) {
+			continue;
+		}
+
+		now = std::chrono::steady_clock::now();
+		double elapsed = std::chrono::duration<double>(now - rate_start).count();
+		if(elapsed >= 2.0) {
+			double mib_per_second = interval_bytes / elapsed / (1024.0 * 1024.0);
+			double megabits_per_second = interval_bytes * 8.0 / elapsed / 1000000.0;
+			printf("[NET 9014] DMA contiguous TX rate: %.2f MiB/s (%.2f Mbps), "
+				   "bytes: %llu, "
+				   "interval: %.2f s\n",
+				   mib_per_second, megabits_per_second, interval_bytes, elapsed);
+			fflush(stdout);
+			interval_bytes = 0;
+			rate_start = now;
+		}
+
+		if(!did_work) {
+			std::this_thread::sleep_for(std::chrono::microseconds(100));
 		}
 	}
-	// free(data_buf);
+
+	free(packet_buffer);
 }
 
 bool SyncSend::IsActive(){
@@ -135,17 +185,6 @@ int SyncSend::Send(const char * buf, int size){
 			return FAIL;
 		}
 	}
-	return OK;
-}
-
-int SyncSend::DmaSend(char * buf, int size, int chn_id){
-	ClassResponse response(size+4);
-	response.WriteReqcode(UP_CODE);
-	response.WriteType(0x03);
-	response.WritePayload(&chn_id, 0, 4);
-	response.WritePayload(buf, 4, size);
-	SendResponse(&response);
-	// printf("send dma data size = %d\n",size);
 	return OK;
 }
 

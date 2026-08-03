@@ -130,7 +130,7 @@ bool TcpSocket::SendFully(const void *buffer,int size){
     int send = 0;
     while( send < size ) {
         int ret = Send(p,size-send);
-        if(ret<0) {
+		if(ret<=0) {
             return false;
         }
         p+=ret;
@@ -162,15 +162,15 @@ bool TcpSocket::IsConnected() const{
     return socket_ != -1;
 }
 void TcpSocket::SetRecvTimeout(int milliseconds){
-    timeval tm;
-    tm.tv_sec = 0;
-    tm.tv_usec = milliseconds * 1000;
+	timeval tm;
+	tm.tv_sec = milliseconds / 1000;
+	tm.tv_usec = (milliseconds % 1000) * 1000;
     setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO, &tm, sizeof(tm));
 }
 void TcpSocket::SetSendTimeout(int milliseconds){
-    timeval tm;
-    tm.tv_sec = 0;
-    tm.tv_usec = milliseconds * 1000;
+	timeval tm;
+	tm.tv_sec = milliseconds / 1000;
+	tm.tv_usec = (milliseconds % 1000) * 1000;
     setsockopt(socket_, SOL_SOCKET, SO_SNDTIMEO, &tm, sizeof(tm));
 }
 void TcpSocket::SetRecvBUfSize(int size){

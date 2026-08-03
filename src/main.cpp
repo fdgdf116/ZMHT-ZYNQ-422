@@ -18,6 +18,10 @@ int main(int argc, char* argv[]){
 #else
     signal(SIGINT, prog_exit);
 #endif
+
+#if DATA_PORT_BENCHMARK_MODE
+	printf("9014 benchmark mode: synthetic data uses the DMA ring buffer\n");
+#endif
 	ret = init_1553B();
 	if(ret != 0)
 	{
@@ -64,4 +68,3 @@ void prog_exit(int sig_no){
 	recv_dma_exit();
 	exit(0);
 }
-

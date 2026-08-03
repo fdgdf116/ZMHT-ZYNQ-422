@@ -87,6 +87,7 @@ static unsigned int rx_dma_phy_addr[SGDMA_NUM] = {0xa2000000};
 #endif
 static struct sgdma_data_info data_info[SGDMA_NUM];
 static struct sgdma_data_info rx_data_info[SGDMA_NUM];
+static unsigned int sgdma_tx_thread_chn[SGDMA_NUM];
 
 // FILE* fp_write_test = NULL;
 // FILE* fp_net_dma_tx = NULL;
@@ -391,12 +392,18 @@ void* sgdma_h_tx_pthread(void* arg)
 	image_frame_info_t frame_info;
 	chn_id = *((unsigned int*)arg);
 	unsigned int* dma_addr = NULL;
+	if(chn_id < 0 || chn_id >= SGDMA_NUM) {
+		printf("[%s] invalid channel id: %d, max: %d\n",
+			   __func__, chn_id, SGDMA_NUM);
+		return NULL;
+	}
 
 	sgdma_tx = &data_info[chn_id].sgdma_tx;
 	printf("[%s-%d]-101-1008-1616+-Debug-chn_id:%d--\n",__func__, __LINE__, chn_id);
 	ring_buffer_t *rb = data_info[chn_id].data_stream.dma_data_rb;
 	if(rb == NULL){
 		printf("[%s-%d]--Debug-chn_id:%d-rb error-\n",__func__, __LINE__, chn_id);
+		return NULL;
 	}
 
 	while(1){
@@ -625,15 +632,17 @@ int system_init(void)
 			printf("sgdma%d tx init error \n", num);
 			return 2;
 		} else if(!ret){
-			//pthread_create(&sgdma_tid[num], NULL, sgdma_tx_pthread, &num);
+			sgdma_tx_thread_chn[num] = (unsigned int)num;
 			if(num < SGDMA_NUM){
-				ret = pthread_create(&sgdma_tid[num], &attr, sgdma_h_tx_pthread, &num);
+				ret = pthread_create(&sgdma_tid[num], &attr, sgdma_h_tx_pthread,
+								 &sgdma_tx_thread_chn[num]);
 				if(ret != 0){
 					printf("[Debug] sgdma_h_tx_pthread create error \n");
 					return 3;
 				}
 			} else {
-				pthread_create(&sgdma_tid[num], NULL, sgdma_l_tx_pthread, &num);
+				ret = pthread_create(&sgdma_tid[num], NULL, sgdma_l_tx_pthread,
+								 &sgdma_tx_thread_chn[num]);
 				if(ret != 0){
 					printf("[Debug] sgdma_l_tx_pthread create error \n");
 					return 3;
@@ -757,7 +766,6 @@ static void *zmuav_pl2ps_irq_recv_pthread(void* parameter)
 				frame_info.frame_offset = rx_data_info[0].ringbuf_offset;
 				frame_info.frame_size = recv_count;
 				pcie_data_to_queue(rb, &frame_info);
-				// SyncSend::GetInstance()->DmaSend((char *)dma_addr, recv_count, 0);
 				// gettimeofday(&end, NULL);
 				// seconds = end.tv_sec - start.tv_sec;
 				// microseconds = end.tv_usec - start.tv_usec;
@@ -771,6 +779,43 @@ static void *zmuav_pl2ps_irq_recv_pthread(void* parameter)
     }
 	fclose(fp);
     return NULL;
+}
+
+static void *synthetic_dma_rx_pthread(void* parameter)
+{
+	(void)parameter;
+	const unsigned int frame_size = RECV_DMA_DATA_SIZE;
+	struct sgdma_info* sgdma_rx = &rx_data_info[0].sgdma_tx;
+	ring_buffer_t *rb = rx_data_info[0].data_stream.dma_data_rb;
+
+	if(rb == NULL || sgdma_rx->mem_vir_base == NULL ||
+	   sgdma_rx->map_size < frame_size) {
+		printf("[DMA TEST] synthetic buffer is not initialized\n");
+		return NULL;
+	}
+
+	/* Fill the DMA mapping once. The producer only queues descriptors later. */
+	memset(sgdma_rx->mem_vir_base, 0x5a, sgdma_rx->map_size);
+	printf("[DMA TEST] synthetic producer started, frame: %u bytes, map: %u bytes\n",
+		   frame_size, sgdma_rx->map_size);
+
+	while(1) {
+		while(ringbuffer_is_full(rb)) {
+			usleep(50);
+		}
+
+		if(rx_data_info[0].ringbuf_offset + frame_size > sgdma_rx->map_size) {
+			rx_data_info[0].ringbuf_offset = 0;
+		}
+
+		image_frame_info_t frame_info;
+		frame_info.frame_offset = rx_data_info[0].ringbuf_offset;
+		frame_info.frame_size = frame_size;
+		pcie_data_to_queue(rb, &frame_info);
+		rx_data_info[0].ringbuf_offset += frame_size;
+	}
+
+	return NULL;
 }
 
 unsigned int last1_done_cnt = 0;
@@ -922,13 +967,22 @@ int recv_dma_init(void)
 			return 2;
 		}
 	}
-    ret = pthread_create(&recv_tid, &attr, zmuav_pl2ps_irq_recv_pthread, NULL);
+#if DATA_PORT_BENCHMARK_MODE
+	for(num = 0; num < SGDMA_NUM; ++num) {
+		s2mm_dma_disable(&rx_data_info[num].sgdma_tx);
+	}
+	ret = pthread_create(&recv_tid, &attr, synthetic_dma_rx_pthread, NULL);
+	if (ret != 0) {
+		printf("synthetic dma producer pthread_create error \n");
+		return 3;
+	}
+#else
+	ret = pthread_create(&recv_tid, &attr, zmuav_pl2ps_irq_recv_pthread, NULL);
     if (ret != 0) {
         printf("irq recv pthread_create error \n");
         return 3;
     }
+#endif
 	pthread_attr_destroy(&attr);
     return 0;
 }
-
-
