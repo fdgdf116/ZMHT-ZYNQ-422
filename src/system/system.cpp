@@ -45,9 +45,9 @@ using namespace network;
 #else
 
 #define ON_DATA_SIZE_L (1024)
-#define DMA_SIZE_MAX_L ((64+1)*512*1024)
 #define DMA_DATA_PKG_MAX_L (32*1024)
-#define DMARX_DATA_PKG_MAX_L (64)
+#define DMARX_DATA_PKG_MAX_L (16)
+#define DMA_SIZE_MAX_L ((DMARX_DATA_PKG_MAX_L+1)*RECV_DMA_DATA_SIZE)
 
 #endif
 
@@ -741,10 +741,12 @@ static void *zmuav_pl2ps_irq_recv_pthread(void* parameter)
 		while (ringbuffer_is_full(rb))
 		{
 			ringbuffer_full_cnt++;
-			if(ringbuffer_full_cnt > 1000){
+			if(ringbuffer_full_cnt >= 40000){
 				printf("[%s]ringbuffer is full.!!!!!!!!!!\n", __func__);
 				ringbuffer_full_cnt = 0;
 			}
+			/* Keep all queued frames and let the 9014 sender release a slot. */
+			usleep(50);
 		}
 		
 
@@ -753,7 +755,27 @@ static void *zmuav_pl2ps_irq_recv_pthread(void* parameter)
 			gettimeofday(&start, NULL);
 			s2mm_dma_enable(sgdma_rx);
 			get_s2mm_dma(sgdma_rx,rx_data_info[0].ringbuf_offset,data_szie);
-			ret = SelectBlock(sgdma_rx);
+			unsigned int wait_timeout_count = 0;
+			do {
+				ret = SelectBlock(sgdma_rx);
+				if(ret == 0) {
+					unsigned int status = *(sgdma_rx->dma_base_addr + 0x34/4);
+					/* IOC may be set even if userspace missed the IRQ notification. */
+					if((status & 0x1000U) != 0U) {
+						ret = 1;
+						break;
+					}
+					wait_timeout_count++;
+					if(wait_timeout_count >= 4) {
+						printf("[DMA RX] S2MM timeout, status: 0x%08x, "
+							   "offset: 0x%x, ring: %u/%u\n",
+							   status, rx_data_info[0].ringbuf_offset,
+							   ringbuffer_len(rb), ringbuffer_cap(rb));
+						fflush(stdout);
+						wait_timeout_count = 0;
+					}
+				}
+			} while(ret == 0);
 			if(ret > 0)
 			{
 				recv_count = getdatacount(sgdma_rx);

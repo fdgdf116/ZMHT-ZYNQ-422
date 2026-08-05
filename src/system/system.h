@@ -8,7 +8,7 @@ extern "C" {
 
 #define SGDMA_NUM (1)
 #define ON_DATA_SIZE (1024)
-#define RECV_DMA_DATA_SIZE (512*1024)//(2*1024*1024)
+#define RECV_DMA_DATA_SIZE (2*1024*1024)
 
 void sgdma_memcpy_data(unsigned char chn_id, unsigned char* data);
 int system_init(void);
