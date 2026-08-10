@@ -151,11 +151,6 @@ void SyncSend::DaemodLoop(Thread * thread){
 		if(elapsed >= 2.0) {
 			double mib_per_second = interval_bytes / elapsed / (1024.0 * 1024.0);
 			double megabits_per_second = interval_bytes * 8.0 / elapsed / 1000000.0;
-			printf("[NET 9014] DMA contiguous TX rate: %.2f MiB/s (%.2f Mbps), "
-				   "bytes: %llu, "
-				   "interval: %.2f s\n",
-				   mib_per_second, megabits_per_second, interval_bytes, elapsed);
-			fflush(stdout);
 			interval_bytes = 0;
 			rate_start = now;
 		}

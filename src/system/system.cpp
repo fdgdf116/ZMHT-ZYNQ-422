@@ -767,11 +767,6 @@ static void *zmuav_pl2ps_irq_recv_pthread(void* parameter)
 					}
 					wait_timeout_count++;
 					if(wait_timeout_count >= 4) {
-						printf("[DMA RX] S2MM timeout, status: 0x%08x, "
-							   "offset: 0x%x, ring: %u/%u\n",
-							   status, rx_data_info[0].ringbuf_offset,
-							   ringbuffer_len(rb), ringbuffer_cap(rb));
-						fflush(stdout);
 						wait_timeout_count = 0;
 					}
 				}
