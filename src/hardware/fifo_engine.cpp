@@ -39,6 +39,7 @@ using namespace network;
 #define FPGA_PCIE_READ_DATA_OFFSET (0x1000)
 
 #define AXIFIFO_ONCE_SEND_DATA_SIZE_MAX (512)
+#define AXIFIFO_RX_PAYLOAD_MAX (AXIFIFO_ONCE_SEND_DATA_SIZE_MAX - sizeof(uint32_t))
 #define PCIE_AXIFIFO_BUF_SIZE_MAX (1024)
 #define AXIFIFO_HEAD_SIZE (2)
 #define AXIFIFO_LENGH_SIZE (1)
@@ -285,7 +286,6 @@ int rx_fifo_data_get(unsigned char chn_id, u_int8_t** data)
     image_frame_info_t frame_info;
     ring_buffer_t *rb;
     int len = 0;
-    static unsigned long ringbuffer_full_cnt = 0;
     struct fifo_data_info_t *fifo_data_info = &g_axififo_info->fifo_data_info[chn_id];
     
     if(chn_id >= FIFO_NUM || !fifo_data_info || !data) {
@@ -300,11 +300,6 @@ int rx_fifo_data_get(unsigned char chn_id, u_int8_t** data)
     }
     
     if(ringbuffer_is_empty(rb)) {
-        if((ringbuffer_full_cnt % 100000) == 0){
-            // printf("fifo%d ringbuffer empty cnt:%ld \n", chn_id, ringbuffer_full_cnt);
-        }
-        usleep(10);
-        ringbuffer_full_cnt += 1;
         return 0;
     }
     
@@ -332,20 +327,19 @@ void fifo_memcpy_data(unsigned char chn_id, unsigned char* data, int size)
 	ring_buffer_t *rb;
 	unsigned char* fifo_addr;
 	unsigned long ringbuffer_full_cnt = 0;
+
+	if(g_axififo_info == NULL || data == NULL || size <= 0 || chn_id >= FIFO_NUM){
+		printf("[%s] invalid input chn:%d size:%d (max chn:%d)\n",
+		       __func__, chn_id, size, FIFO_NUM);
+		return ;
+	}
+
 	struct fifo_data_info_t *fifo_data_info = &g_axififo_info->fifo_data_info[chn_id];
-
-	if(size>508)
-	{
-		printf("[%s %d] chn:%d size(%d) > 508 error \n", __func__, __LINE__, chn_id, size);
-		return ;
-	}
-
-	if(chn_id >= FIFO_NUM){
-		printf("[%s] chn id(%d) >= chn max(%d) error \n", __func__, chn_id, FIFO_NUM);
-		return ;
-	}
-
 	rb = fifo_data_info->fifo_data_rb;
+	if(rb == NULL || fifo_data_info->data == NULL) {
+		printf("[%s] chn:%d FIFO buffer is not initialized\n", __func__, chn_id);
+		return;
+	}
 
 
 #if 0
@@ -374,30 +368,44 @@ void fifo_memcpy_data(unsigned char chn_id, unsigned char* data, int size)
 
 
 #endif
-	if(fifo_data_info->ringbuf_offset + AXI_FIFO_BUF_UNIT_SIZE > fifo_data_info->map_size){
-		fifo_data_info->ringbuf_offset = 0;
+	/*
+	 * A software FIFO slot is 512 bytes, while the wire protocol reserves
+	 * four bytes (the historical limit was 508 bytes).  Hardware RDFO can
+	 * report more than one slot at a time (for example 514 bytes).  Queue the
+	 * complete input as several slots instead of dropping the whole batch.
+	 */
+	while(size > 0) {
+		int chunk_size = size;
+		if(chunk_size > AXIFIFO_RX_PAYLOAD_MAX) {
+			chunk_size = AXIFIFO_RX_PAYLOAD_MAX;
+		}
+
+		if(fifo_data_info->ringbuf_offset + AXI_FIFO_BUF_UNIT_SIZE > fifo_data_info->map_size){
+			fifo_data_info->ringbuf_offset = 0;
+		}
+
+		while(ringbuffer_is_full(rb)) {
+			/* Let the network sender release a descriptor instead of busy-spinning. */
+			if((ringbuffer_full_cnt % 10000) == 0) {
+				printf("[%s,%d] chn%d ringbuffer full cnt:%ld \n",
+				       __func__, __LINE__, chn_id, ringbuffer_full_cnt);
+			}
+			usleep(10);
+			++ringbuffer_full_cnt;
+		}
+
+		fifo_addr = fifo_data_info->data + fifo_data_info->ringbuf_offset;
+		memcpy(fifo_addr, data, (size_t)chunk_size);
+
+		frame_info.frame_offset = fifo_data_info->ringbuf_offset;
+		frame_info.frame_size = chunk_size;
+		pcie_data_to_queue(rb, &frame_info);
+
+		fifo_data_info->ringbuf_offset += AXI_FIFO_BUF_UNIT_SIZE;
+		fifo_data_info->ringbuf_count += 1;
+		data += chunk_size;
+		size -= chunk_size;
 	}
-
-    while(ringbuffer_is_full(rb)) {
-    	// if((ringbuffer_full_cnt % 10000) == 0){
-    		printf("[%s,%d] chn%d ringbuffer full cnt:%ld \n",__func__,__LINE__, chn_id, ringbuffer_full_cnt);
-    	// }
-        // usleep(10);
-        // ringbuffer_full_cnt += 1;
-    }
-
-	fifo_addr = fifo_data_info->data + fifo_data_info->ringbuf_offset;
-	memcpy(fifo_addr, data, size);
-
-	// frame_info.frame_index = fifo_data_info->ringbuf_count;
-	frame_info.frame_offset = fifo_data_info->ringbuf_offset;
-	frame_info.frame_size = size;
-	pcie_data_to_queue(rb, &frame_info);
-
-	// data_info[chn_id].dma_stop_flag = 0;
-
-	fifo_data_info->ringbuf_offset += AXI_FIFO_BUF_UNIT_SIZE;
-	fifo_data_info->ringbuf_count += 1;
 }
 
 void fifo_tx_memcpy_data(unsigned char chn_id, unsigned char* data, int size)
@@ -486,14 +494,27 @@ static void *axififo_recv_data_pthread(void* parameter)
 	unsigned char RecvBuffer[AXIFIFO_RECV_DATA_SIZE];
 	while(1){
 		for(int fifo_id = 0;fifo_id < FIFO_NUM;fifo_id++){
+			int free_slots = fifo_memcpy_rb_avail(fifo_id);
 			/*
 			读fifo长度
 			./reg_rw /dev/xdma0_control 0x40024
 			*/
-			if(fifo_memcpy_rb_avail(fifo_id) < AXI_FIFO_BUF_SIZE - 1024)
+			if(free_slots == 0)
 				continue;
 			recv_cnt = stream_fifo_read_data_len(&g_axififo_info->fifo_reg[fifo_id]);
 			if(recv_cnt > 0){
+				/* RDFO is occupancy, not a protocol-frame length.  Read as much
+				 * as fits in the temporary buffer; fifo_memcpy_data() splits it
+				 * into <=508-byte software slots without dropping the remainder. */
+				if(recv_cnt > (int)sizeof(RecvBuffer)) {
+					recv_cnt = sizeof(RecvBuffer);
+				}
+				/* Do not consume more hardware data than the software ring can
+				 * queue without blocking this thread on the next chunk. */
+				int slot_capacity = free_slots * AXIFIFO_RX_PAYLOAD_MAX;
+				if(recv_cnt > slot_capacity) {
+					recv_cnt = slot_capacity;
+				}
 				// printf("func:%s line:%d recv_cnt:%d \n",__func__,__LINE__, recv_cnt);
 				/*
 				读数据
@@ -515,12 +536,18 @@ static void *axififo_recv_data_pthread(void* parameter)
 
 int axififo_recv(unsigned int fifo_id, unsigned char* data)
 {
+	if(g_axififo_info == NULL || data == NULL || fifo_id >= FIFO_NUM) {
+		return 0;
+	}
 		/*
 		读fifo长度
 		./reg_rw /dev/xdma0_control 0x40024
 		*/
 		int recv_cnt = stream_fifo_read_data_len(&g_axififo_info->fifo_reg[fifo_id]);
 		if(recv_cnt > 0){
+			if(recv_cnt > AXIFIFO_RECV_DATA_SIZE) {
+				recv_cnt = AXIFIFO_RECV_DATA_SIZE;
+			}
 			/*
 			读数据
 			./reg_rw /dev/xdma0_control 0x51000
