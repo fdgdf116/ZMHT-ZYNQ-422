@@ -98,7 +98,6 @@ void SyncSend::DaemodLoop(Thread * thread){
 				rate_start = std::chrono::steady_clock::now();
 				last_alive_check = rate_start;
 			} else {
-				printf("[NET 9014] waiting for data client\n");
 			}
 			continue;
 		}

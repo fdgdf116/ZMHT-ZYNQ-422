@@ -1,4 +1,6 @@
 file(REMOVE_RECURSE
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.o"
+  "CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.o.d"
   "CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o"
   "CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o.d"
   "CMakeFiles/pxie_dma_sample.dir/src/hardware/fifo_engine.cpp.o"

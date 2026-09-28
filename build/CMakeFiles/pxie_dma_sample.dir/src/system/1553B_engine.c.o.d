@@ -122,7 +122,7 @@ CMakeFiles/pxie_dma_sample.dir/src/system/1553B_engine.c.o: \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/in.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/inttypes.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/sys/time.h \
- /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/zmuav_wrmem.h \
+ /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_buffer_mem.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/system/1553B_engine.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/include/common/common.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/ringbuffer.h \

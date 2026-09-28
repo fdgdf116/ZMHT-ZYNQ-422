@@ -1,4 +1,7 @@
 #include <thread>
+#include <errno.h>
+#include <time.h>
+#include <poll.h>
 #include "network_main.h"
 #include "n_event.h"
 #include "fifo_engine.h"
@@ -65,7 +68,7 @@ int NetServer::Init(int port){
         return thread_.Run(&NetServer::ServiceLoop,this,Thread::PRIORITY_HIGH);
     } 
     else if(port == DATA_DOWN_PORT) {
-        daemod_thread_.Run(&NetServer::DaemodLoop,this,Thread::PRIORITY_NORMAL);
+        // Strip the 16-byte request header; queue all following body bytes.
         return thread_.Run(&NetServer::DataServiceLoop,this,Thread::PRIORITY_NORMAL);
     }
     else
@@ -115,77 +118,103 @@ void NetServer::DaemodLoop(Thread * thread){
             ret = SendResponse(&response);
 
 		}
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
 	}
 }
 
 void NetServer::DataServiceLoop(Thread *thread){
-    int cpu = 0;//控制面跑在cpu0上
-    cpu_set_t mask;
-    CPU_ZERO(&mask);
-    CPU_SET(cpu, &mask);
-    if(pthread_setaffinity_np(pthread_self(),sizeof(mask),&mask)<0){
-        perror("1.pthread_setaffinity_np!!!!!!\n");return;
+    unsigned char* buffer = network_rx_dma_buffer();
+    if(!buffer) {
+        fprintf(stderr, "[NET 9016 RX] 32 MiB DMA mapping unavailable\n");
+        return;
     }
-    sleep(3);
-    printf("1.data down ServerLoop start \n");
-    while( thread_.IsInterrupted() == false ) {
-        if(client_==nullptr) {
-            client_ = server_->Accept(10);
-            if(client_!=nullptr) {
-				/* Command/data connections may stay idle; keep receive blocking. */
-				client_->SetRecvTimeout(0);
-                client_->SetSendTimeout(3000);
-                client_->set_keepalive(3, 3, 3);
-
-                struct sockaddr_in peerAddr;
-                socklen_t  peerLen = sizeof(peerAddr);
-                int peerfd = client_->GetSocketId();
-                getpeername(peerfd, (struct sockaddr *)&peerAddr, &peerLen);
-                char pc_ip[INET_ADDRSTRLEN] = {0};
-                inet_ntop(AF_INET, &peerAddr.sin_addr, pc_ip, sizeof(pc_ip));
-                printf("1.data down client pc address = %s \n",pc_ip);
-
-            } else {
-    	        printf("1.data down server no accept client.!!!!!! \n");
+    unsigned int offset = 0;
+    uint64_t wraps = 0;
+    while(!thread_.IsInterrupted()) {
+        TcpSocket* connection = server_->Accept(1);
+        if(!connection) continue;
+        connection->SetRecvTimeout(0);
+        connection->SetRecvBUfSize(4 * 1024 * 1024);
+        connection->set_keepalive(3, 3, 3);
+        uint64_t bytes = 0;
+        Request header = {};
+        static_assert(sizeof(Request) == 16, "9016 request header must be 16 bytes");
+        unsigned int header_received = 0;
+        uint32_t body_remaining = 0;
+        struct timespec start, now;
+        clock_gettime(CLOCK_MONOTONIC, &start);
+        while(!thread_.IsInterrupted()) {
+            struct pollfd fd = {connection->GetSocketId(), POLLIN, 0};
+            int ready = poll(&fd, 1, 100);
+            if(ready < 0) {
+                if(errno == EINTR) continue;
+                break;
             }
-        }
-        if(client_!=nullptr) {
-            char recv_buf[256] = {0} ;
-            char * common_buffer = (char*)malloc(4096);
-            int ret = client_->RecvFully(&recv_buf,16);
-            if(ret>0) {
-                Request * req_head = (Request *)&recv_buf;
-                req_head->cmd_code = ntohl(req_head->cmd_code);
-                req_head->length = ntohl(req_head->length);
-                if(req_head->cmd_code == DATA_CODE) {
-                    if(req_head->length>0){
-                        char * msg = common_buffer;
-                        if( (req_head->length+16) > 4096 ) {
-                            msg = (char *)malloc(16+req_head->length);
-                        }
-                        ret = client_->RecvFully((void *)(msg+16),req_head->length);
-                        if(ret>0) { 
-                            memcpy(msg, &recv_buf, sizeof(Request));
-                            
-                            DataProcMessage(msg);
-                            
-                        } else {
-                            printf("1.data down client leaving...when recv msg.!!!!!! \n");
-                            if(client_){client_->Close();delete client_; client_=nullptr;}
-                        }
+            if(ready > 0) {
+                if(fd.revents & POLLIN) {
+                    unsigned char* destination = NULL;
+                    unsigned int length = 0;
+                    const bool reading_header = body_remaining == 0;
+                    int reserved = 0;
+                    if(reading_header) {
+                        destination = reinterpret_cast<unsigned char*>(&header) + header_received;
+                        length = sizeof(header) - header_received;
                     } else {
-                        DataProcMessage((char*)&recv_buf);
+                        reserved = network_dma_reserve(&destination, &length);
+                        if(length > body_remaining) length = body_remaining;
                     }
-                } else {
-                    printf("1.cmd_code %#x error.!!!!!! \n",req_head->cmd_code);
-                }
-            } else {
-                printf("1.data down client leaving...when recv head.!!!!!! \n");
-                if(client_){client_->Close();delete client_; client_=nullptr;}
+                    if(reserved < 0) break;
+                    if(reserved > 0) {
+                        // All blocks busy (or DMA paused): leave data in TCP for backpressure.
+                        usleep(1000);
+                    } else {
+                        int received = connection->Recv(destination, length);
+                        if(received <= 0) {
+                            if(received < 0 && errno == EINTR) continue;
+                            break;
+                        }
+                        if(reading_header) {
+                            header_received += received;
+                            if(header_received == sizeof(header)) {
+                                body_remaining = ntohl(static_cast<uint32_t>(header.length));
+                                header_received = 0;
+                                // Request.length is a signed 32-bit protocol field.
+                                if(body_remaining > INT32_MAX) {
+                                    fprintf(stderr, "[NET 9016 RX] invalid request length=%u; closing connection\n", body_remaining);
+                                    break;
+                                }
+                            }
+                        } else {
+                            body_remaining -= received;
+                            bytes += received;
+                            offset = static_cast<unsigned int>(destination - buffer) + received;
+                            network_dma_received(received);
+                            if(offset == NETWORK_RX_RING_SIZE) {
+                                offset = 0;
+                                ++wraps;
+                            }
+                        }
+                    }
+                } else if(fd.revents & (POLLERR | POLLHUP | POLLNVAL)) break;
             }
-            free(common_buffer);
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            double seconds = (now.tv_sec - start.tv_sec) + (now.tv_nsec - start.tv_nsec) / 1e9;
+            if(seconds >= 2.0) {
+                if(bytes) {
+                    double rate = bytes / seconds;
+                    printf("[NET 9016 RX] devmem-queued payload %.2f MiB/s %.2f Mbit/s bytes=%llu interval=%.3fs buffer_bytes=%u offset=%u wraps=%llu\n",
+                           rate / 1048576.0, rate * 8.0 / 1e6,
+                           (unsigned long long)bytes, seconds, NETWORK_RX_RING_SIZE, offset,
+                           (unsigned long long)wraps);
+                    fflush(stdout);
+                }
+                bytes = 0;
+                start = now;
+            }
         }
+        network_dma_abort_partial();
+        connection->Close();
+        delete connection;
     }
 }
 void NetServer::ServiceLoop(Thread *thread){
@@ -219,7 +248,6 @@ void NetServer::ServiceLoop(Thread *thread){
                 Exception::GetInstance()->Init(pc_ip,ENVENT_PORT);
 
             } else {
-    	        printf("1.cmd server port:%d no accept client.!!!!!! \n",port_);
             }
         }
         if(client_!=nullptr) {
@@ -397,31 +425,9 @@ int NetServer::Read1553BData(Request *request){
 }
 
 int NetServer::NetDmaMM2S(Request *request){
-	int ret = 0 ;
-	ClassRequest Request_t(request);
-	unsigned char* data_buf;
-	int size = Request_t.GetPayloadSize();
-    if( size != ON_DATA_SIZE+4 ) {
-        printf("1.Data length not same,opcode = 0x%x size:%d ON_DATA_SIZE:%d !!!!!! \n",request->index,size,ON_DATA_SIZE);
-    }
-    /* logic */
-    int chn,flag = 0 ;
-    Request_t.GetPayload(&chn,0,4);
-    chn=ntohl(chn);
-    //printf("+++read chn:0x%x +++++\n", chn);
-
-    data_buf = (unsigned char*)Request_t.GetPayloadAddr();
-    sgdma_memcpy_data(chn, data_buf+4);
-    // printf("NetDmaMM2S chn:%d size:%d\n",chn,size-4);
-
-    /* response */
-	// ClassResponse response(sizeof(int));
-	// response.WriteType(request->index);
-	// ret = htonl(ret);
-	// response.WritePayload(&ret, 0, sizeof(int));
-	// response.WriteCount(Request_t.GetCount());
-	// ret = SendResponse(&response);
-	return ret;
+    // The synthetic DMA worker owns both TX buffers; ignore network DMA payloads.
+    (void)request;
+    return 0;
 }
 
 int NetServer::FIFOSendData(Request *request){

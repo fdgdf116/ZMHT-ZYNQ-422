@@ -270,5 +270,4 @@ CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o: \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/lib/gcc/arm-linux-gnueabihf/7.2.1/include/stdbool.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/xutils.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_utils.h \
- /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/zmuav_wrmem.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/zmuav_pl2ps_irq.h

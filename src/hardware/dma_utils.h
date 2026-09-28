@@ -5,9 +5,6 @@
 extern "C" {
 #endif
 
-#include "zmuav_wrmem.h"
-
-#define PL_DDR 0
 // #define SGDMA_NUM (10)
 
 struct dma_addr_info {
@@ -25,7 +22,7 @@ struct sgdma_info {
 	struct dma_addr_info addr_info;
 };
 
-int sgdma_init(int chn_id, char* devicename,struct dma_addr_info* addr_info, unsigned int dma_data_size, struct sgdma_info *dma_info);
+int sgdma_init(int chn_id, const char* devicename,struct dma_addr_info* addr_info, unsigned int dma_data_size, struct sgdma_info *dma_info);
 void sgdma_exit(struct sgdma_info *dma_info);
 void push_mm2s_dma(struct sgdma_info *dma_info, unsigned int offset, int size);
 void get_s2mm_dma(struct sgdma_info *dma_info, unsigned int offset, int size);

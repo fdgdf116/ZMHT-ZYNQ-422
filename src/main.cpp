@@ -66,5 +66,6 @@ int main(int argc, char* argv[]){
 void prog_exit(int sig_no){
 	system_exit();
 	recv_dma_exit();
+	close_1553B();
 	exit(0);
 }

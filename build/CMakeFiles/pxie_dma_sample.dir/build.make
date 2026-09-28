@@ -83,10 +83,24 @@ CMakeFiles/pxie_dma_sample.dir/src/main.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/pxie_dma_sample.dir/src/main.cpp.s"
 	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/main.cpp -o CMakeFiles/pxie_dma_sample.dir/src/main.cpp.s
 
+CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.o: CMakeFiles/pxie_dma_sample.dir/flags.make
+CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.o: ../src/hardware/dma_buffer_mem.c
+CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.o: CMakeFiles/pxie_dma_sample.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building C object CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.o"
+	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-gcc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.o -MF CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.o.d -o CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.o -c /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_buffer_mem.c
+
+CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing C source to CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.i"
+	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-gcc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_buffer_mem.c > CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.i
+
+CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling C source to assembly CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.s"
+	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-gcc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_buffer_mem.c -o CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.s
+
 CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o: CMakeFiles/pxie_dma_sample.dir/flags.make
 CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o: ../src/hardware/dma_utils.c
 CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o: CMakeFiles/pxie_dma_sample.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building C object CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building C object CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o"
 	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-gcc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o -MF CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o.d -o CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o -c /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_utils.c
 
 CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.i: cmake_force
@@ -100,7 +114,7 @@ CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.s: cmake_force
 CMakeFiles/pxie_dma_sample.dir/src/hardware/fifo_engine.cpp.o: CMakeFiles/pxie_dma_sample.dir/flags.make
 CMakeFiles/pxie_dma_sample.dir/src/hardware/fifo_engine.cpp.o: ../src/hardware/fifo_engine.cpp
 CMakeFiles/pxie_dma_sample.dir/src/hardware/fifo_engine.cpp.o: CMakeFiles/pxie_dma_sample.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/pxie_dma_sample.dir/src/hardware/fifo_engine.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/pxie_dma_sample.dir/src/hardware/fifo_engine.cpp.o"
 	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/pxie_dma_sample.dir/src/hardware/fifo_engine.cpp.o -MF CMakeFiles/pxie_dma_sample.dir/src/hardware/fifo_engine.cpp.o.d -o CMakeFiles/pxie_dma_sample.dir/src/hardware/fifo_engine.cpp.o -c /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/fifo_engine.cpp
 
 CMakeFiles/pxie_dma_sample.dir/src/hardware/fifo_engine.cpp.i: cmake_force
@@ -114,7 +128,7 @@ CMakeFiles/pxie_dma_sample.dir/src/hardware/fifo_engine.cpp.s: cmake_force
 CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.o: CMakeFiles/pxie_dma_sample.dir/flags.make
 CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.o: ../src/hardware/pcie_reg_rw.c
 CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.o: CMakeFiles/pxie_dma_sample.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building C object CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building C object CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.o"
 	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-gcc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.o -MF CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.o.d -o CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.o -c /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/pcie_reg_rw.c
 
 CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.i: cmake_force
@@ -128,7 +142,7 @@ CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.s: cmake_force
 CMakeFiles/pxie_dma_sample.dir/src/hardware/queue.c.o: CMakeFiles/pxie_dma_sample.dir/flags.make
 CMakeFiles/pxie_dma_sample.dir/src/hardware/queue.c.o: ../src/hardware/queue.c
 CMakeFiles/pxie_dma_sample.dir/src/hardware/queue.c.o: CMakeFiles/pxie_dma_sample.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building C object CMakeFiles/pxie_dma_sample.dir/src/hardware/queue.c.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building C object CMakeFiles/pxie_dma_sample.dir/src/hardware/queue.c.o"
 	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-gcc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/pxie_dma_sample.dir/src/hardware/queue.c.o -MF CMakeFiles/pxie_dma_sample.dir/src/hardware/queue.c.o.d -o CMakeFiles/pxie_dma_sample.dir/src/hardware/queue.c.o -c /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/queue.c
 
 CMakeFiles/pxie_dma_sample.dir/src/hardware/queue.c.i: cmake_force
@@ -142,7 +156,7 @@ CMakeFiles/pxie_dma_sample.dir/src/hardware/queue.c.s: cmake_force
 CMakeFiles/pxie_dma_sample.dir/src/hardware/ringbuffer.c.o: CMakeFiles/pxie_dma_sample.dir/flags.make
 CMakeFiles/pxie_dma_sample.dir/src/hardware/ringbuffer.c.o: ../src/hardware/ringbuffer.c
 CMakeFiles/pxie_dma_sample.dir/src/hardware/ringbuffer.c.o: CMakeFiles/pxie_dma_sample.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building C object CMakeFiles/pxie_dma_sample.dir/src/hardware/ringbuffer.c.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building C object CMakeFiles/pxie_dma_sample.dir/src/hardware/ringbuffer.c.o"
 	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-gcc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/pxie_dma_sample.dir/src/hardware/ringbuffer.c.o -MF CMakeFiles/pxie_dma_sample.dir/src/hardware/ringbuffer.c.o.d -o CMakeFiles/pxie_dma_sample.dir/src/hardware/ringbuffer.c.o -c /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/ringbuffer.c
 
 CMakeFiles/pxie_dma_sample.dir/src/hardware/ringbuffer.c.i: cmake_force
@@ -156,7 +170,7 @@ CMakeFiles/pxie_dma_sample.dir/src/hardware/ringbuffer.c.s: cmake_force
 CMakeFiles/pxie_dma_sample.dir/src/hardware/stream_fifo.c.o: CMakeFiles/pxie_dma_sample.dir/flags.make
 CMakeFiles/pxie_dma_sample.dir/src/hardware/stream_fifo.c.o: ../src/hardware/stream_fifo.c
 CMakeFiles/pxie_dma_sample.dir/src/hardware/stream_fifo.c.o: CMakeFiles/pxie_dma_sample.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building C object CMakeFiles/pxie_dma_sample.dir/src/hardware/stream_fifo.c.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building C object CMakeFiles/pxie_dma_sample.dir/src/hardware/stream_fifo.c.o"
 	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-gcc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/pxie_dma_sample.dir/src/hardware/stream_fifo.c.o -MF CMakeFiles/pxie_dma_sample.dir/src/hardware/stream_fifo.c.o.d -o CMakeFiles/pxie_dma_sample.dir/src/hardware/stream_fifo.c.o -c /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/stream_fifo.c
 
 CMakeFiles/pxie_dma_sample.dir/src/hardware/stream_fifo.c.i: cmake_force
@@ -170,7 +184,7 @@ CMakeFiles/pxie_dma_sample.dir/src/hardware/stream_fifo.c.s: cmake_force
 CMakeFiles/pxie_dma_sample.dir/src/hardware/xutils.c.o: CMakeFiles/pxie_dma_sample.dir/flags.make
 CMakeFiles/pxie_dma_sample.dir/src/hardware/xutils.c.o: ../src/hardware/xutils.c
 CMakeFiles/pxie_dma_sample.dir/src/hardware/xutils.c.o: CMakeFiles/pxie_dma_sample.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building C object CMakeFiles/pxie_dma_sample.dir/src/hardware/xutils.c.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building C object CMakeFiles/pxie_dma_sample.dir/src/hardware/xutils.c.o"
 	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-gcc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/pxie_dma_sample.dir/src/hardware/xutils.c.o -MF CMakeFiles/pxie_dma_sample.dir/src/hardware/xutils.c.o.d -o CMakeFiles/pxie_dma_sample.dir/src/hardware/xutils.c.o -c /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/xutils.c
 
 CMakeFiles/pxie_dma_sample.dir/src/hardware/xutils.c.i: cmake_force
@@ -184,7 +198,7 @@ CMakeFiles/pxie_dma_sample.dir/src/hardware/xutils.c.s: cmake_force
 CMakeFiles/pxie_dma_sample.dir/src/network/n_event.cpp.o: CMakeFiles/pxie_dma_sample.dir/flags.make
 CMakeFiles/pxie_dma_sample.dir/src/network/n_event.cpp.o: ../src/network/n_event.cpp
 CMakeFiles/pxie_dma_sample.dir/src/network/n_event.cpp.o: CMakeFiles/pxie_dma_sample.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object CMakeFiles/pxie_dma_sample.dir/src/network/n_event.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object CMakeFiles/pxie_dma_sample.dir/src/network/n_event.cpp.o"
 	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/pxie_dma_sample.dir/src/network/n_event.cpp.o -MF CMakeFiles/pxie_dma_sample.dir/src/network/n_event.cpp.o.d -o CMakeFiles/pxie_dma_sample.dir/src/network/n_event.cpp.o -c /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/network/n_event.cpp
 
 CMakeFiles/pxie_dma_sample.dir/src/network/n_event.cpp.i: cmake_force
@@ -198,7 +212,7 @@ CMakeFiles/pxie_dma_sample.dir/src/network/n_event.cpp.s: cmake_force
 CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.o: CMakeFiles/pxie_dma_sample.dir/flags.make
 CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.o: ../src/network/network_main.cpp
 CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.o: CMakeFiles/pxie_dma_sample.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.o"
 	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.o -MF CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.o.d -o CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.o -c /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/network/network_main.cpp
 
 CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.i: cmake_force
@@ -212,7 +226,7 @@ CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.s: cmake_force
 CMakeFiles/pxie_dma_sample.dir/src/network/sync_send.cpp.o: CMakeFiles/pxie_dma_sample.dir/flags.make
 CMakeFiles/pxie_dma_sample.dir/src/network/sync_send.cpp.o: ../src/network/sync_send.cpp
 CMakeFiles/pxie_dma_sample.dir/src/network/sync_send.cpp.o: CMakeFiles/pxie_dma_sample.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object CMakeFiles/pxie_dma_sample.dir/src/network/sync_send.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object CMakeFiles/pxie_dma_sample.dir/src/network/sync_send.cpp.o"
 	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/pxie_dma_sample.dir/src/network/sync_send.cpp.o -MF CMakeFiles/pxie_dma_sample.dir/src/network/sync_send.cpp.o.d -o CMakeFiles/pxie_dma_sample.dir/src/network/sync_send.cpp.o -c /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/network/sync_send.cpp
 
 CMakeFiles/pxie_dma_sample.dir/src/network/sync_send.cpp.i: cmake_force
@@ -226,7 +240,7 @@ CMakeFiles/pxie_dma_sample.dir/src/network/sync_send.cpp.s: cmake_force
 CMakeFiles/pxie_dma_sample.dir/src/network/tcp_socket.cpp.o: CMakeFiles/pxie_dma_sample.dir/flags.make
 CMakeFiles/pxie_dma_sample.dir/src/network/tcp_socket.cpp.o: ../src/network/tcp_socket.cpp
 CMakeFiles/pxie_dma_sample.dir/src/network/tcp_socket.cpp.o: CMakeFiles/pxie_dma_sample.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object CMakeFiles/pxie_dma_sample.dir/src/network/tcp_socket.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object CMakeFiles/pxie_dma_sample.dir/src/network/tcp_socket.cpp.o"
 	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/pxie_dma_sample.dir/src/network/tcp_socket.cpp.o -MF CMakeFiles/pxie_dma_sample.dir/src/network/tcp_socket.cpp.o.d -o CMakeFiles/pxie_dma_sample.dir/src/network/tcp_socket.cpp.o -c /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/network/tcp_socket.cpp
 
 CMakeFiles/pxie_dma_sample.dir/src/network/tcp_socket.cpp.i: cmake_force
@@ -240,7 +254,7 @@ CMakeFiles/pxie_dma_sample.dir/src/network/tcp_socket.cpp.s: cmake_force
 CMakeFiles/pxie_dma_sample.dir/src/network/thread.cpp.o: CMakeFiles/pxie_dma_sample.dir/flags.make
 CMakeFiles/pxie_dma_sample.dir/src/network/thread.cpp.o: ../src/network/thread.cpp
 CMakeFiles/pxie_dma_sample.dir/src/network/thread.cpp.o: CMakeFiles/pxie_dma_sample.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object CMakeFiles/pxie_dma_sample.dir/src/network/thread.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Building CXX object CMakeFiles/pxie_dma_sample.dir/src/network/thread.cpp.o"
 	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/pxie_dma_sample.dir/src/network/thread.cpp.o -MF CMakeFiles/pxie_dma_sample.dir/src/network/thread.cpp.o.d -o CMakeFiles/pxie_dma_sample.dir/src/network/thread.cpp.o -c /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/network/thread.cpp
 
 CMakeFiles/pxie_dma_sample.dir/src/network/thread.cpp.i: cmake_force
@@ -254,7 +268,7 @@ CMakeFiles/pxie_dma_sample.dir/src/network/thread.cpp.s: cmake_force
 CMakeFiles/pxie_dma_sample.dir/src/system/1553B_engine.c.o: CMakeFiles/pxie_dma_sample.dir/flags.make
 CMakeFiles/pxie_dma_sample.dir/src/system/1553B_engine.c.o: ../src/system/1553B_engine.c
 CMakeFiles/pxie_dma_sample.dir/src/system/1553B_engine.c.o: CMakeFiles/pxie_dma_sample.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Building C object CMakeFiles/pxie_dma_sample.dir/src/system/1553B_engine.c.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building C object CMakeFiles/pxie_dma_sample.dir/src/system/1553B_engine.c.o"
 	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-gcc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/pxie_dma_sample.dir/src/system/1553B_engine.c.o -MF CMakeFiles/pxie_dma_sample.dir/src/system/1553B_engine.c.o.d -o CMakeFiles/pxie_dma_sample.dir/src/system/1553B_engine.c.o -c /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/system/1553B_engine.c
 
 CMakeFiles/pxie_dma_sample.dir/src/system/1553B_engine.c.i: cmake_force
@@ -268,7 +282,7 @@ CMakeFiles/pxie_dma_sample.dir/src/system/1553B_engine.c.s: cmake_force
 CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o: CMakeFiles/pxie_dma_sample.dir/flags.make
 CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o: ../src/system/system.cpp
 CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o: CMakeFiles/pxie_dma_sample.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o"
 	/home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/bin/arm-linux-gnueabihf-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o -MF CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o.d -o CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o -c /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/system/system.cpp
 
 CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.i: cmake_force
@@ -282,6 +296,7 @@ CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.s: cmake_force
 # Object files for target pxie_dma_sample
 pxie_dma_sample_OBJECTS = \
 "CMakeFiles/pxie_dma_sample.dir/src/main.cpp.o" \
+"CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.o" \
 "CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o" \
 "CMakeFiles/pxie_dma_sample.dir/src/hardware/fifo_engine.cpp.o" \
 "CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.o" \
@@ -301,6 +316,7 @@ pxie_dma_sample_OBJECTS = \
 pxie_dma_sample_EXTERNAL_OBJECTS =
 
 pxie_dma_sample: CMakeFiles/pxie_dma_sample.dir/src/main.cpp.o
+pxie_dma_sample: CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.o
 pxie_dma_sample: CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o
 pxie_dma_sample: CMakeFiles/pxie_dma_sample.dir/src/hardware/fifo_engine.cpp.o
 pxie_dma_sample: CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.o
@@ -317,7 +333,7 @@ pxie_dma_sample: CMakeFiles/pxie_dma_sample.dir/src/system/1553B_engine.c.o
 pxie_dma_sample: CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o
 pxie_dma_sample: CMakeFiles/pxie_dma_sample.dir/build.make
 pxie_dma_sample: CMakeFiles/pxie_dma_sample.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Linking CXX executable pxie_dma_sample"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_17) "Linking CXX executable pxie_dma_sample"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/pxie_dma_sample.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
