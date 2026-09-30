@@ -1,4 +1,5 @@
 #include <thread>
+#include <memory>
 #include <errno.h>
 #include <time.h>
 #include <poll.h>
@@ -44,7 +45,8 @@ NetServer::AnswerMapEntry NetServer::DatamapEntry_[] = {
 };
 
 NetServer::NetServer(){
-    server_=nullptr;client_=nullptr;mutex_.Init();
+    server_=nullptr;client_=nullptr;client_data_=nullptr;mutex_.Init();
+    data_client_mutex_.Init();
 }
 void handle_pipe(int sig) {
     //不做任何处理即可
@@ -75,7 +77,8 @@ int NetServer::Init(int port){
         return thread_.Run(&NetServer::ServiceLoop,this,Thread::PRIORITY_HIGH);
     } 
     else if(port == DATA_DOWN_PORT) {
-        // Strip the request header and DMA channel prefix before queuing payload.
+        if(!daemod_thread_.Run(&NetServer::DaemodLoop,this,Thread::PRIORITY_NORMAL))
+            return -1;
         return thread_.Run(&NetServer::DataServiceLoop,this,Thread::PRIORITY_NORMAL);
     }
     else
@@ -84,53 +87,49 @@ int NetServer::Init(int port){
     }
 }
 
-#if 0 // Capacity reporting is disabled in the current benchmark mode.
 void NetServer::DaemodLoop(Thread * thread){
-    int ret = 0;
-	while( daemod_thread_.IsInterrupted() == false ){
-		if(client_ == nullptr){
-			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-		} else {
-			if( !client_->IsAlive() ) {
-				printf("-----------------2.Cache report client leaving...\n");
-				client_->Close();
-				client_ = nullptr;
-				continue;
-			}
-            Cache_report_inf_t dma_capacity[FREE_SPACE_NUM_MAX];
-            memset(dma_capacity,0x00,sizeof(Cache_report_inf_t)*FREE_SPACE_NUM_MAX);
-            sgdma_mm2s_query_capacity(dma_capacity);
-            sgdma_vfifo_query_capacity(dma_capacity);
-            axififo_query_capacity(dma_capacity);
-            for(int chn = 0; chn < FREE_SPACE_NUM_MAX; chn++) {
-                // printf("1.Cache report chn:%d can_space:%d pulse_space:%d simulation_space:%d dmaddr_space:%d vfifo_space:%d axififo_space:%d \n",
-                //     chn,
-                //     dma_capacity[chn].can_space,
-                //     dma_capacity[chn].pulse_space,
-                //     dma_capacity[chn].simulation_space,
-                //     dma_capacity[chn].dmaddr_space,
-                //     dma_capacity[chn].vfifo_space,
-                //     dma_capacity[chn].axififo_space);
-                dma_capacity[chn].chn_id = chn;
-                dma_capacity[chn].can_space = htonl(dma_capacity[chn].can_space);
-                dma_capacity[chn].pulse_space = htonl(dma_capacity[chn].pulse_space);
-                dma_capacity[chn].simulation_space = htonl(dma_capacity[chn].simulation_space);
-                dma_capacity[chn].dmaddr_space = htonl(dma_capacity[chn].dmaddr_space);
-                dma_capacity[chn].vfifo_space = htonl(dma_capacity[chn].vfifo_space);
-                dma_capacity[chn].axififo_space = htonl(dma_capacity[chn].axififo_space);
+    (void)thread;
+    while(!daemod_thread_.IsInterrupted()) {
+        {
+            // The receive thread owns this socket. It clears the pointer under
+            // this same lock before closing/deleting it, including on reconnect.
+            MutexScopedLocker locker(data_client_mutex_);
+            if(client_data_) {
+                Cache_report_inf_t capacity[FREE_SPACE_NUM_MAX] = {};
+                sgdma_mm2s_query_capacity(capacity);
+                sgdma_vfifo_query_capacity(capacity);
+                axififo_query_capacity(capacity);
+                for(int chn=0; chn<FREE_SPACE_NUM_MAX; ++chn) {
+                    capacity[chn].chn_id = chn;
+                    capacity[chn].can_space = htonl(capacity[chn].can_space);
+                    capacity[chn].pulse_space = htonl(capacity[chn].pulse_space);
+                    capacity[chn].simulation_space = htonl(capacity[chn].simulation_space);
+                    capacity[chn].dmaddr_space = htonl(capacity[chn].dmaddr_space);
+                    capacity[chn].vfifo_space = htonl(capacity[chn].vfifo_space);
+                    capacity[chn].axififo_space = htonl(capacity[chn].axififo_space);
+                }
+                // Preserve the legacy 16 records (400 bytes), index 0x0001.
+                ClassResponse response(sizeof(capacity));
+                response.WriteType(0x01);
+                response.WritePayload(capacity, 0, sizeof(capacity));
+                struct iovec packet = {response.GetResponse(), sizeof(Response)+sizeof(capacity)};
+                if(!client_data_->SendVectorFully(&packet, 1)) {
+                    // Wake recv/poll without deleting an object still in use.
+                    shutdown(client_data_->GetSocketId(), SHUT_RDWR);
+                    client_data_ = nullptr;
+                }
             }
-            /* response */
-            ClassResponse response(sizeof(Cache_report_inf_t)*FREE_SPACE_NUM_MAX);
-            response.WriteType(0x01);
-            response.WritePayload(dma_capacity, 0, sizeof(Cache_report_inf_t)*FREE_SPACE_NUM_MAX);
-            ret = SendResponse(&response);
-
-		}
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
-	}
+    }
 }
 
-#endif
+// Also check disconnects while a full DMA/FIFO queue prevents another recv.
+static bool data_peer_closed(TcpSocket* connection) {
+    struct pollfd fd = {connection->GetSocketId(), POLLIN | POLLRDHUP, 0};
+    int ready = poll(&fd, 1, 0);
+    return ready > 0 && (fd.revents & (POLLERR | POLLHUP | POLLRDHUP | POLLNVAL));
+}
 
 void NetServer::DataServiceLoop(Thread *thread){
     unsigned char* buffer = network_rx_dma_buffer();
@@ -144,8 +143,13 @@ void NetServer::DataServiceLoop(Thread *thread){
         TcpSocket* connection = server_->Accept(1);
         if(!connection) continue;
         connection->SetRecvTimeout(0);
+        connection->SetSendTimeout(3000);
         connection->SetRecvBUfSize(16 * 1024 * 1024);
         connection->set_keepalive(3, 3, 3);
+        {
+            MutexScopedLocker locker(data_client_mutex_);
+            client_data_ = connection;
+        }
         uint64_t bytes = 0;
         Request header = {};
         static_assert(sizeof(Request) == 16, "9016 request header must be 16 bytes");
@@ -153,11 +157,33 @@ void NetServer::DataServiceLoop(Thread *thread){
         uint32_t body_remaining = 0;
         unsigned char channel[4] = {};
         unsigned int channel_received = sizeof(channel);
+        bool fifo_request = false;
+        uint32_t fifo_channel = 0;
+        std::unique_ptr<unsigned char, decltype(&free)> fifo_payload(nullptr, &free);
+        unsigned int fifo_enqueued = 0;
+        unsigned int fifo_filled = 0;
         bool socket_readable = false;
         uint64_t recv_calls = 0, poll_calls = 0;
         struct timespec start, now;
         clock_gettime(CLOCK_MONOTONIC, &start);
         while(!thread_.IsInterrupted()) {
+            // Receive the entire FIFO request before publishing any chunk.
+            // Keep the completed request while a full queue applies backpressure.
+            if(fifo_request && body_remaining == 0 && fifo_enqueued < fifo_filled) {
+                unsigned int chunk = fifo_filled - fifo_enqueued;
+                if(chunk > AXIFIFO_TX_PAYLOAD_MAX) chunk = AXIFIFO_TX_PAYLOAD_MAX;
+                int queued = fifo_tx_try_memcpy_data(fifo_channel,
+                                                     fifo_payload.get() + fifo_enqueued, chunk);
+                if(queued < 0) break;
+                if(queued > 0) {
+                    if(data_peer_closed(connection)) break;
+                    usleep(1000);
+                    continue;
+                }
+                fifo_enqueued += chunk;
+                if(fifo_enqueued == fifo_filled) fifo_payload.reset();
+                continue;
+            }
             struct pollfd fd = {connection->GetSocketId(), POLLIN, POLLIN};
             // Drain available TCP data before waiting again. MSG_DONTWAIT below
             // keeps fragmented requests and idle connections interruptible.
@@ -184,6 +210,10 @@ void NetServer::DataServiceLoop(Thread *thread){
                     } else if(reading_channel) {
                         destination = channel + channel_received;
                         length = sizeof(channel) - channel_received;
+                    } else if(fifo_request) {
+                        destination = fifo_payload.get() + fifo_filled;
+                        length = body_remaining;
+                        if(length > NETWORK_RECV_CHUNK_SIZE) length = NETWORK_RECV_CHUNK_SIZE;
                     } else {
                         reserved = network_dma_reserve(&destination, &length);
                         if(length > body_remaining) length = body_remaining;
@@ -194,6 +224,7 @@ void NetServer::DataServiceLoop(Thread *thread){
                     if(reserved < 0) break;
                     if(reserved > 0) {
                         // All blocks busy (or DMA paused): leave data in TCP for backpressure.
+                        if(data_peer_closed(connection)) break;
                         usleep(1000);
                     } else {
                         ++recv_calls;
@@ -217,19 +248,43 @@ void NetServer::DataServiceLoop(Thread *thread){
                                     fprintf(stderr, "[NET 9016 RX] invalid request length=%u; closing connection\n", body_remaining);
                                     break;
                                 }
-                                // DMA Request.length includes the four-byte channel number.
-                                // Keep metadata out of mapped memory, including on short reads.
-                                channel_received = sizeof(channel);
-                                if(ntohs(header.index) == 0x0204) {
-                                    if(body_remaining < sizeof(channel)) {
-                                        fprintf(stderr, "[NET 9016 RX] DMA request missing channel; length=%u; closing connection\n", body_remaining);
-                                        break;
-                                    }
-                                    channel_received = 0;
+                                const uint16_t index = ntohs(header.index);
+                                fifo_request = index == 0x0006;
+                                if(index != 0x0204 && !fifo_request) {
+                                    fprintf(stderr, "[NET 9016 RX] unsupported index=0x%04x\n", index);
+                                    break;
                                 }
+                                // Both legacy request types start with a channel.
+                                if(body_remaining < sizeof(channel)) {
+                                    fprintf(stderr, "[NET 9016 RX] request missing channel; length=%u\n", body_remaining);
+                                    break;
+                                }
+                                channel_received = 0;
+                                fifo_filled = 0;
+                                fifo_enqueued = 0;
+                                fifo_payload.reset();
                             }
                         } else if(reading_channel) {
                             channel_received += received;
+                            body_remaining -= received;
+                            if(fifo_request && channel_received == sizeof(channel)) {
+                                uint32_t wire_channel;
+                                memcpy(&wire_channel, channel, sizeof(wire_channel));
+                                fifo_channel = ntohl(wire_channel);
+                                if(fifo_channel >= FIFO_NUM) {
+                                    fprintf(stderr, "[NET 9016 RX] invalid FIFO channel=%u\n", fifo_channel);
+                                    break;
+                                }
+                                if(body_remaining) {
+                                    fifo_payload.reset(static_cast<unsigned char*>(malloc(body_remaining)));
+                                    if(!fifo_payload) {
+                                        fprintf(stderr, "[NET 9016 RX] FIFO request allocation failed: %u bytes\n", body_remaining);
+                                        break;
+                                    }
+                                }
+                            }
+                        } else if(fifo_request) {
+                            fifo_filled += received;
                             body_remaining -= received;
                         } else {
                             body_remaining -= received;
@@ -264,8 +319,14 @@ void NetServer::DataServiceLoop(Thread *thread){
             }
         }
         network_dma_abort_partial();
-        connection->Close();
-        delete connection;
+        // Interrupt an outstanding report send before waiting for its lock.
+        shutdown(connection->GetSocketId(), SHUT_RDWR);
+        {
+            MutexScopedLocker locker(data_client_mutex_);
+            client_data_ = nullptr;
+            connection->Close();
+            delete connection;
+        }
     }
 }
 void NetServer::ServiceLoop(Thread *thread){

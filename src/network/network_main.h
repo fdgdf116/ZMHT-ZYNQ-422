@@ -31,6 +31,8 @@ private:
 	TcpSocket *client_;
 	TcpSocket *client_data_;
     Mutex mutex_;
+    // Guards the 9016 connection lifetime while the report thread sends.
+    Mutex data_client_mutex_;
 	int port_;
 	char pc_ip[INET_ADDRSTRLEN] = {0};
 	void DataServiceLoop(Thread *thread);

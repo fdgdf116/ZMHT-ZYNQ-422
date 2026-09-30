@@ -9,6 +9,11 @@
 #undef private
 #include "../src/network/network_main.cpp"
 #include "../src/system/system.cpp"
+// This fixture covers DMA only; FIFO traffic must never enter it.
+extern "C" int fifo_tx_try_memcpy_data(unsigned char, unsigned char*, int) {
+    assert(false && "unexpected FIFO traffic in DMA regression");
+    return -1;
+}
 static unsigned char* mapped;
 
 int main(int argc, char** argv) {

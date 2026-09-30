@@ -68,15 +68,12 @@ void SyncSend::DaemodLoop(Thread * thread){
 	Response* response = &header.response;
 	response->cmd_code = htonl(UP_CODE);
 	response->index = htons(0x03);
-	unsigned long long interval_bytes = 0;
-	unsigned long long interval_payload_bytes = 0;
-	unsigned long long interval_frames = 0;
-	std::chrono::steady_clock::time_point rate_start =
+	std::chrono::steady_clock::time_point last_alive_check =
 		std::chrono::steady_clock::now();
-	std::chrono::steady_clock::time_point last_alive_check = rate_start;
 	printf("[NET 9014] DMA vector sender ready, max payload: %u bytes\n",
 		   (unsigned int)payload_capacity);
 
+	int next_fifo_id = 0;
 	while(!is_interrupt_){
 		if(exc_client_ == nullptr){
 			exc_client_ = server_->Accept(10);
@@ -85,11 +82,7 @@ void SyncSend::DaemodLoop(Thread * thread){
 				exc_client_->SetSendBUfSize(4*1024*1024);
 				exc_client_->SetSendTimeout(3000);
 				exc_client_->set_keepalive(200, 60, 20);
-				interval_bytes = 0;
-				interval_payload_bytes = 0;
-				interval_frames = 0;
-				rate_start = std::chrono::steady_clock::now();
-				last_alive_check = rate_start;
+				last_alive_check = std::chrono::steady_clock::now();
 			} else {
 			}
 			continue;
@@ -110,6 +103,35 @@ void SyncSend::DaemodLoop(Thread * thread){
 
 		bool did_work = false;
 		bool send_failed = false;
+        // Legacy FIFO framing, with a bounded round-robin burst before the
+        // next whole DMA frame. Never interrupt a DMA vector send.
+        int empty_channels = 0;
+        for(int sent=0; sent<64 && empty_channels<FIFO_NUM;) {
+            int fifo_id = next_fifo_id;
+            next_fifo_id = (next_fifo_id + 1) % FIFO_NUM;
+            unsigned char* fifo_data = nullptr;
+            int fifo_size = rx_fifo_data_get(fifo_id, &fifo_data);
+            if(fifo_size <= 0) { ++empty_channels; continue; }
+            empty_channels = 0;
+            did_work = true;
+            ClassResponse fifo_response(fifo_size + sizeof(uint32_t));
+            fifo_response.WriteReqcode(UP_CODE);
+            fifo_response.WriteType(0x06);
+            uint32_t channel = htonl((uint32_t)fifo_id);
+            fifo_response.WritePayload(&channel, 0, sizeof(channel));
+            fifo_response.WritePayload(fifo_data, sizeof(channel), fifo_size);
+            if(!exc_client_->SendFully(fifo_response.GetResponse(),
+                                      sizeof(Response) + sizeof(channel) + fifo_size)) {
+                printf("[NET 9014] FIFO send failed, data client disconnected\n");
+                exc_client_->Close();
+                delete exc_client_;
+                exc_client_ = nullptr;
+                send_failed = true;
+                break;
+            }
+            ++sent;
+        }
+        if(send_failed) continue;
 		for(int dma_id = 0; dma_id < SGDMA_NUM; ++dma_id) {
 			size = rx_sgdma_data_get(dma_id, ptr);
 			if(size > 0) {
@@ -125,7 +147,6 @@ void SyncSend::DaemodLoop(Thread * thread){
 					{&header, sizeof(header)},
 					{data_buf, (size_t)size}
 				};
-				int packet_size = sizeof(header) + size;
 				// Keep this frame until sendmsg has consumed every byte. With 17 RX
 				// blocks and 16 queued descriptors, the producer cannot wrap onto
 				// this block before this sole consumer takes the next descriptor.
@@ -137,31 +158,10 @@ void SyncSend::DaemodLoop(Thread * thread){
 					send_failed = true;
 					break;
 				}
-				interval_bytes += packet_size;
-				interval_payload_bytes += size;
-				++interval_frames;
 			}
 		}
 		if(send_failed) {
 			continue;
-		}
-
-		now = std::chrono::steady_clock::now();
-		double elapsed = std::chrono::duration<double>(now - rate_start).count();
-		if(elapsed >= 2.0) {
-			printf("[NET 9014 TX] payload %.2f MiB/s %.2f Mbit/s "
-				   "with_header %.2f MiB/s %.2f Mbit/s "
-				   "payload_bytes=%llu sent_bytes=%llu frames=%llu interval=%.3fs\n",
-				   interval_payload_bytes / elapsed / 1048576.0,
-				   interval_payload_bytes * 8.0 / elapsed / 1000000.0,
-				   interval_bytes / elapsed / 1048576.0,
-				   interval_bytes * 8.0 / elapsed / 1000000.0,
-				   interval_payload_bytes, interval_bytes, interval_frames, elapsed);
-			fflush(stdout);
-			interval_bytes = 0;
-			interval_payload_bytes = 0;
-			interval_frames = 0;
-			rate_start = now;
 		}
 
 		if(!did_work) {

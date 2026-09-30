@@ -297,7 +297,8 @@ int sgdma_vfifo_query_capacity(Cache_report_inf_t* capacity)
 	int* vir_addr = (int*)mmap(NULL,GENERAL_REG_SZIE,PROT_READ|PROT_WRITE,MAP_SHARED,fd,aligment_addr);
 	if( vir_addr == MAP_FAILED ) {
 		perror("mmap fail.!!!!!!\n");
-		return ret;
+        close(fd);
+		return -1;
 	}
 	for(int chn_id = 0; chn_id < VFIFO_NUM; chn_id++)
 	{
