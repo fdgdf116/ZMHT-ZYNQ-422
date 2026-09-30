@@ -9,6 +9,8 @@ extern "C" {
 #define SGDMA_NUM (1)
 #define ON_DATA_SIZE (1024)
 #define RECV_DMA_DATA_SIZE (2*1024*1024)
+// 9016 TX submission size; independent of the RX DMA transfer size.
+#define NETWORK_TX_BLOCK_SIZE (2u * 1024u * 1024u)
 
 #define NETWORK_RX_RING_SIZE (32u * 1024u * 1024u)
 unsigned char* network_rx_dma_buffer(void);

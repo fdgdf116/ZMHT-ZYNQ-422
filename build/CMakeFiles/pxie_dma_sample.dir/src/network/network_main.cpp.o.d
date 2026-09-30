@@ -300,4 +300,5 @@ CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.o: \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/fifo_engine.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/include/common/common.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/system/system.h \
+ /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_buffer_mem.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/system/1553B_engine.h

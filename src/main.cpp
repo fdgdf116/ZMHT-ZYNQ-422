@@ -2,6 +2,7 @@
 #include "fifo_engine.h"
 #include "system.h"
 #include "1553B_engine.h"
+#include "common.h"
 #include "sync_send.h"
 using namespace network;
 
@@ -22,6 +23,7 @@ int main(int argc, char* argv[]){
 #if DATA_PORT_BENCHMARK_MODE
 	printf("9014 benchmark mode: synthetic data uses the DMA ring buffer\n");
 #endif
+#if ENABLE_1553B
 	ret = init_1553B();
 	if(ret != 0)
 	{
@@ -29,6 +31,7 @@ int main(int argc, char* argv[]){
 		return ret;
 	}
 
+#endif
 	ret = recv_dma_init();
 	if(ret != 0)
 	{
@@ -53,8 +56,10 @@ int main(int argc, char* argv[]){
 	SyncSend::GetInstance()->Init();
 	NetServer cmd_server;
 	cmd_server.Init(CMD_PORT);
+#if ENABLE_1553B
 	NetServer data_1553b_server;
 	data_1553b_server.Init(DATA_1553B_PORT);
+#endif
 	NetServer data_server;
 	data_server.Init(DATA_DOWN_PORT);
 
@@ -66,6 +71,8 @@ int main(int argc, char* argv[]){
 void prog_exit(int sig_no){
 	system_exit();
 	recv_dma_exit();
+#if ENABLE_1553B
 	close_1553B();
+#endif
 	exit(0);
 }

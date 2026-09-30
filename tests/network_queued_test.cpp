@@ -23,6 +23,7 @@ int main(int argc, char** argv) {
     data_info[0].sgdma_tx.mem_vir_base=mapped;
     data_info[0].sgdma_tx.map_size=NETWORK_RX_RING_SIZE;
     // Emulate completion only after dequeuing; real TCP uses production queue APIs.
+#if !NETWORK_MALLOC_BENCHMARK
     std::thread([] {
         while(true) {
             NetworkDescriptor descriptor;
@@ -30,6 +31,7 @@ int main(int argc, char** argv) {
             else usleep(100);
         }
     }).detach();
+#endif
     network::NetServer server;
     server.server_ = new network::TcpSocket;
     assert(server.server_->CreateServer(0, "127.0.0.1") == 0);

@@ -80,6 +80,8 @@ void SyncSend::DaemodLoop(Thread * thread){
 	unsigned char* packet_payload =
 		packet_buffer + sizeof(Response) + sizeof(uint32_t);
 	unsigned long long interval_bytes = 0;
+	unsigned long long interval_payload_bytes = 0;
+	unsigned long long interval_frames = 0;
 	std::chrono::steady_clock::time_point rate_start =
 		std::chrono::steady_clock::now();
 	std::chrono::steady_clock::time_point last_alive_check = rate_start;
@@ -95,6 +97,8 @@ void SyncSend::DaemodLoop(Thread * thread){
 				exc_client_->SetSendTimeout(3000);
 				exc_client_->set_keepalive(200, 60, 20);
 				interval_bytes = 0;
+				interval_payload_bytes = 0;
+				interval_frames = 0;
 				rate_start = std::chrono::steady_clock::now();
 				last_alive_check = rate_start;
 			} else {
@@ -139,6 +143,8 @@ void SyncSend::DaemodLoop(Thread * thread){
 					break;
 				}
 				interval_bytes += packet_size;
+				interval_payload_bytes += size;
+				++interval_frames;
 			}
 		}
 		if(send_failed) {
@@ -148,9 +154,18 @@ void SyncSend::DaemodLoop(Thread * thread){
 		now = std::chrono::steady_clock::now();
 		double elapsed = std::chrono::duration<double>(now - rate_start).count();
 		if(elapsed >= 2.0) {
-			double mib_per_second = interval_bytes / elapsed / (1024.0 * 1024.0);
-			double megabits_per_second = interval_bytes * 8.0 / elapsed / 1000000.0;
+			printf("[NET 9014 TX] payload %.2f MiB/s %.2f Mbit/s "
+				   "with_header %.2f MiB/s %.2f Mbit/s "
+				   "payload_bytes=%llu sent_bytes=%llu frames=%llu interval=%.3fs\n",
+				   interval_payload_bytes / elapsed / 1048576.0,
+				   interval_payload_bytes * 8.0 / elapsed / 1000000.0,
+				   interval_bytes / elapsed / 1048576.0,
+				   interval_bytes * 8.0 / elapsed / 1000000.0,
+				   interval_payload_bytes, interval_bytes, interval_frames, elapsed);
+			fflush(stdout);
 			interval_bytes = 0;
+			interval_payload_bytes = 0;
+			interval_frames = 0;
 			rate_start = now;
 		}
 

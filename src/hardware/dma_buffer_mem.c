@@ -12,11 +12,13 @@
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <string.h>
+#include <stdlib.h>
 struct allocation {
     unsigned char* address;
     unsigned int length;
     unsigned int physical;
     int owner_fd;
+    int malloced;
 };
 static struct allocation allocations[DMA_BUFFER_COUNT];
 
@@ -63,20 +65,33 @@ int dma_buffer_map(enum dma_buffer_region region, unsigned int bytes,
             goto fail;
         }
     }
-    int fd = open(MEM_DEV_NAME, O_RDWR | O_SYNC);
-    if(fd < 0) { perror("open /dev/mem"); goto fail; }
-    void* mapping = mmap64(NULL, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, (off64_t)base);
-    int saved_errno = errno;
-    close(fd);
+
+    void* mapping =  mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, owner, base);
+    //mmap64(NULL, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, owner, (off64_t)base);
     if(mapping == MAP_FAILED) {
-        fprintf(stderr, "mmap /dev/mem phys=0x%lx size=%u: %s\n", base, bytes, strerror(saved_errno));
+        fprintf(stderr, "mmap /dev/mem phys=0x%lx size=%u\n", base, bytes);
         goto fail;
     }
-    allocations[region] = (struct allocation){mapping, bytes, (unsigned int)base, owner};
+    allocations[region] = (struct allocation){mapping, bytes, (unsigned int)base, owner, 0};
     *address = mapping;
     *physical = (unsigned int)base;
     printf("[MEM] allocator=%s mapping=%s region=%d phys=0x%08x size=%u virtual=%p\n",
            ZMUAV_WRMEM_DEVICE_NAME, MEM_DEV_NAME, region, *physical, bytes, mapping);
+
+    // int fd = open(MEM_DEV_NAME, O_RDWR | O_SYNC);
+    // if(fd < 0) { perror("open /dev/mem"); goto fail; }
+    // void* mapping = mmap64(NULL, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, (off64_t)base);
+    // int saved_errno = errno;
+    // close(fd);
+    // if(mapping == MAP_FAILED) {
+    //     fprintf(stderr, "mmap /dev/mem phys=0x%lx size=%u: %s\n", base, bytes, strerror(saved_errno));
+    //     goto fail;
+    // }
+    // allocations[region] = (struct allocation){mapping, bytes, (unsigned int)base, owner, 0};
+    // *address = mapping;
+    // *physical = (unsigned int)base;
+    // printf("[MEM] allocator=%s mapping=%s region=%d phys=0x%08x size=%u virtual=%p\n",
+    //        ZMUAV_WRMEM_DEVICE_NAME, MEM_DEV_NAME, region, *physical, bytes, mapping);
     return 0;
 fail:
     if(allocated) release_owner(owner);
@@ -90,11 +105,15 @@ int dma_buffer_unmap(unsigned char* address)
     for(unsigned int i = 0; i < DMA_BUFFER_COUNT; ++i) {
         struct allocation* buffer = &allocations[i];
         if(buffer->address != address) continue;
-        // Keep the driver allocation valid until the user mapping is gone.
-        if(munmap(buffer->address, buffer->length) != 0) {
-            perror("munmap DMA buffer"); return -1;
+        if(buffer->malloced) {
+            free(buffer->address);
+        } else {
+            // Keep the driver allocation valid until the user mapping is gone.
+            if(munmap(buffer->address, buffer->length) != 0) {
+                perror("munmap DMA buffer"); return -1;
+            }
+            release_owner(buffer->owner_fd);
         }
-        release_owner(buffer->owner_fd);
         memset(buffer, 0, sizeof(*buffer));
         return 0;
     }

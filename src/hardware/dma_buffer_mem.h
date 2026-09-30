@@ -1,5 +1,8 @@
 #ifndef ZMHT_DMA_BUFFER_MEM_H
 #define ZMHT_DMA_BUFFER_MEM_H
+#ifndef NETWORK_MALLOC_BENCHMARK
+#define NETWORK_MALLOC_BENCHMARK 0
+#endif
 #ifdef __cplusplus
 extern "C" {
 #endif
