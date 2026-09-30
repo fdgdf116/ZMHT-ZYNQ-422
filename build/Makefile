@@ -129,6 +129,30 @@ pxie_dma_sample/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/pxie_dma_sample.dir/build.make CMakeFiles/pxie_dma_sample.dir/build
 .PHONY : pxie_dma_sample/fast
 
+src/hardware/dma_buffer_mem.o: src/hardware/dma_buffer_mem.c.o
+.PHONY : src/hardware/dma_buffer_mem.o
+
+# target to build an object file
+src/hardware/dma_buffer_mem.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/pxie_dma_sample.dir/build.make CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.o
+.PHONY : src/hardware/dma_buffer_mem.c.o
+
+src/hardware/dma_buffer_mem.i: src/hardware/dma_buffer_mem.c.i
+.PHONY : src/hardware/dma_buffer_mem.i
+
+# target to preprocess a source file
+src/hardware/dma_buffer_mem.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/pxie_dma_sample.dir/build.make CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.i
+.PHONY : src/hardware/dma_buffer_mem.c.i
+
+src/hardware/dma_buffer_mem.s: src/hardware/dma_buffer_mem.c.s
+.PHONY : src/hardware/dma_buffer_mem.s
+
+# target to generate assembly for a file
+src/hardware/dma_buffer_mem.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/pxie_dma_sample.dir/build.make CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.s
+.PHONY : src/hardware/dma_buffer_mem.c.s
+
 src/hardware/dma_utils.o: src/hardware/dma_utils.c.o
 .PHONY : src/hardware/dma_utils.o
 
@@ -498,6 +522,9 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... pxie_dma_sample"
+	@echo "... src/hardware/dma_buffer_mem.o"
+	@echo "... src/hardware/dma_buffer_mem.i"
+	@echo "... src/hardware/dma_buffer_mem.s"
 	@echo "... src/hardware/dma_utils.o"
 	@echo "... src/hardware/dma_utils.i"
 	@echo "... src/hardware/dma_utils.s"

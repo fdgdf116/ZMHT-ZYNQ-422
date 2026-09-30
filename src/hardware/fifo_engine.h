@@ -11,7 +11,7 @@ extern "C" {
 #define RECV_PAK_ERROR 0x5a
 #define COMD_PROC_SUCCESS   0xaa
 #define COMD_PROC_FAILED    0xa5
-#define FIFO_NUM 16
+#define FIFO_NUM 2 // Active AXI FIFO channels: 0 and 1
 
 #define AXIFIFO_RECV_DATA_SIZE (1024)
 

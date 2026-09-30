@@ -170,6 +170,9 @@ CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.o: \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/bits/atomic_base.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/bits/atomic_lockfree_defines.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/backward/auto_ptr.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/poll.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/sys/poll.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/poll.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/network/network_main.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/iostream \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/ostream \
@@ -282,6 +285,8 @@ CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.o: \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/termios.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/termios.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/network/tcp_socket.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/sys/uio.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/uio-ext.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/network/n_event.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/network/singleton.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/queue \
@@ -297,4 +302,5 @@ CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.o: \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/fifo_engine.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/include/common/common.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/system/system.h \
+ /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_buffer_mem.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/system/1553B_engine.h

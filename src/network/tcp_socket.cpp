@@ -1,5 +1,6 @@
 #include "net_common.h"
 #include "tcp_socket.h"
+#include <vector>
 
 namespace network {
 
@@ -138,6 +139,35 @@ bool TcpSocket::SendFully(const void *buffer,int size){
     }
     return true;
 }
+bool TcpSocket::SendVectorFully(const struct iovec *buffers, int count){
+    if(count < 0 || (count > 0 && buffers == nullptr)) return false;
+    if(count == 0) return true;
+    std::vector<struct iovec> remaining(buffers, buffers + count);
+    size_t first = 0;
+    while(first < remaining.size()) {
+        while(first < remaining.size() && remaining[first].iov_len == 0) ++first;
+        if(first == remaining.size()) return true;
+        struct msghdr message = {};
+        message.msg_iov = remaining.data() + first;
+        message.msg_iovlen = remaining.size() - first;
+        ssize_t sent = sendmsg(socket_, &message, MSG_NOSIGNAL);
+        if(sent < 0 && errno == EINTR) continue;
+        // A send timeout or disconnect aborts this frame, as with SendFully.
+        if(sent <= 0) return false;
+        size_t consumed = static_cast<size_t>(sent);
+        while(first < remaining.size() && consumed >= remaining[first].iov_len) {
+            consumed -= remaining[first].iov_len;
+            ++first;
+        }
+        if(first < remaining.size() && consumed != 0) {
+            remaining[first].iov_base =
+                static_cast<char*>(remaining[first].iov_base) + consumed;
+            remaining[first].iov_len -= consumed;
+        }
+    }
+    return true;
+}
+
 void TcpSocket::Close(){
     if(socket_!=-1){
         shutdown(socket_,SHUT_RDWR);close(socket_);socket_=-1;

@@ -37,7 +37,17 @@ link_directories(
 # 查找src目录下的所有源文件
 # 并将名称保存到 DIR_SRCS 变量
 aux_source_directory(./src DIR_SRCS)
-aux_source_directory(./src/hardware DIR_SRCS_HARDWARE)
+# Explicit sources ensure existing build directories pick up the memory backend.
+set(DIR_SRCS_HARDWARE
+    src/hardware/dma_buffer_mem.c
+    src/hardware/dma_utils.c
+    src/hardware/fifo_engine.cpp
+    src/hardware/pcie_reg_rw.c
+    src/hardware/queue.c
+    src/hardware/ringbuffer.c
+    src/hardware/stream_fifo.c
+    src/hardware/xutils.c
+)
 aux_source_directory(./src/network DIR_SRCS_NETWORK)
 aux_source_directory(./src/system DIR_SRCS_SYSTEN)
 

@@ -8,6 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
+  "/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_buffer_mem.c" "CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.o" "gcc" "CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_buffer_mem.c.o.d"
   "/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_utils.c" "CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o" "gcc" "CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o.d"
   "/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/pcie_reg_rw.c" "CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.o" "gcc" "CMakeFiles/pxie_dma_sample.dir/src/hardware/pcie_reg_rw.c.o.d"
   "/home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/queue.c" "CMakeFiles/pxie_dma_sample.dir/src/hardware/queue.c.o" "gcc" "CMakeFiles/pxie_dma_sample.dir/src/hardware/queue.c.o.d"

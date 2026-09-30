@@ -167,6 +167,8 @@ CMakeFiles/pxie_dma_sample.dir/src/network/n_event.cpp.o: \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/bits/parse_numbers.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/termios.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/termios.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/sys/uio.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/uio-ext.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/network/singleton.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/network/thread.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/queue \

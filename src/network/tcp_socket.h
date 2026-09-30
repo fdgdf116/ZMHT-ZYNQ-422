@@ -1,6 +1,7 @@
 #ifndef __TCP_SOCKET_H_
 #define __TCP_SOCKET_H_
 #include "net_common.h"
+#include <sys/uio.h>
 namespace network {
 
 class TcpSocket {
@@ -16,6 +17,8 @@ public:
     int Recv(void * buffer,int size);
     bool RecvFully(void * buffer,int size);
     bool SendFully(const void *buffer,int size);
+    // Copies descriptors only; payload remains in caller-owned memory until return.
+    bool SendVectorFully(const struct iovec *buffers, int count);
     void Close();
     int GetSocketId();
     bool IsAlive();

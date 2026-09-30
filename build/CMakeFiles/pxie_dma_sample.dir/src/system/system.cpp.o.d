@@ -168,6 +168,8 @@ CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o: \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/bits/parse_numbers.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/termios.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/termios.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/sys/uio.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/uio-ext.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/thread \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/memory \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/bits/stl_algobase.h \
@@ -266,9 +268,9 @@ CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o: \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/poll.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/system/system.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/include/common/common.h \
+ /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_buffer_mem.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/ringbuffer.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/lib/gcc/arm-linux-gnueabihf/7.2.1/include/stdbool.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/xutils.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_utils.h \
- /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/zmuav_wrmem.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/zmuav_pl2ps_irq.h

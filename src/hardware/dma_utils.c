@@ -1,3 +1,6 @@
+#ifndef _LARGEFILE64_SOURCE
+#define _LARGEFILE64_SOURCE
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,152 +22,50 @@
 #include <termios.h>
 #include "common.h"
 #include "dma_utils.h"
+#include "dma_buffer_mem.h"
 
-static void MapAddrPhy2Vir(struct sgdma_info *dma_info)
+int sgdma_init(int chn_id, const char* devicename, struct dma_addr_info* addr_info,
+               unsigned int dma_data_size, struct sgdma_info* dma_info)
 {
-	dma_info->dma_base_addr = NULL;
-
-    int fd = open(MEM_DEV_NAME,O_RDWR);
-    if(fd<0){
-        printf("open %s fail \n", MEM_DEV_NAME);
-        return ;
-    }
-#if TEST
-	dma_info->dma_base_addr = (int*)malloc(dma_info->addr_info.size);
-#else
-    dma_info->dma_base_addr = (int*)mmap(NULL,dma_info->addr_info.size,PROT_READ|PROT_WRITE,MAP_SHARED,fd,dma_info->addr_info.phy_addr);
-#endif
-    if(!dma_info->dma_base_addr) {
-    	printf("map %s fail \n", MEM_DEV_NAME);
-		close(fd);
-    	return ;
-    }
+    enum dma_buffer_region region;
+    if(chn_id != 0 || !dma_info || !addr_info || !devicename) return -1;
+    if(strcmp(devicename, "/dev/zmuav_pl2ps_irq_1") == 0) region = DMA_BUFFER_TX;
+    else if(strcmp(devicename, "/dev/zmuav_pl2ps_irq_0") == 0) region = DMA_BUFFER_RX;
+    else return -1;
+    memset(dma_info, 0, sizeof(*dma_info));
+    dma_info->fd = dma_info->mem_fd = -1;
+    dma_info->addr_info = *addr_info;
+    int fd = open(MEM_DEV_NAME, O_RDWR | O_SYNC);
+    if(fd < 0) { perror("open DMA registers /dev/mem"); return -1; }
+    void* registers = mmap64(NULL, addr_info->size, PROT_READ | PROT_WRITE,
+                             MAP_SHARED, fd, (off64_t)addr_info->phy_addr);
     close(fd);
-    return ;
-}
-
-static int UnMapAddrPhy2Vir(volatile void* phy_addr, unsigned long size)
-{
-    printf("unmem map %p \n",phy_addr);
-    return munmap((void *)phy_addr, size);
-}
-
-
-
-int sgdma_init(int chn_id, char* devicename,struct dma_addr_info* addr_info, unsigned int dma_data_size, struct sgdma_info *dma_info)
-{
-	int ret;
-
-    dma_info->addr_info.phy_addr = addr_info->phy_addr;
-    dma_info->addr_info.size = addr_info->size;
-
-	MapAddrPhy2Vir(dma_info);
-	if(!dma_info->dma_base_addr){
-    	printf("dma ctrl mmap error .!!!!!!\n");
-    	ret = 2;
-    	goto err_1;
-	}
-
-	dma_info->fd = open(devicename, O_RDONLY);
-	if (dma_info->fd < 0) {
-		printf("Open %s read failed with error: %s\n", devicename, strerror(errno));
-		fclose(dma_info->fd);
-		goto err_2;
-	}
-	dma_info->mem_fd =open(ZMUAV_WRMEM_DEVICE_NAME,O_RDWR);
-	if(dma_info->mem_fd <0) {
-    	printf("Open %s read failed with error: %s\n", ZMUAV_WRMEM_DEVICE_NAME, strerror(errno));
-    	goto err_3;
-	}
-
-#if PL_DDR
-#else
-    ret = ioctl(dma_info->mem_fd, AXIS_FIFO_SET_MALLOC_SIZE, &dma_data_size);
-    if (ret) {
-        printf("AXIS_FIFO_SET_MALLOC_SIZE ioctl error\n");
-        goto err_2;
-    }
-
-    ret = ioctl(dma_info->mem_fd, AXIS_FIFO_GET_MALLOC_SIZE, &dma_info->map_size);
-    if (ret) {
-        printf("AXIS_FIFO_GET_MALLOC_SIZE ioctl error\n");
-        goto err_2;
-    }
-
-    ret = ioctl(dma_info->mem_fd, AXIS_FIFO_GET_MALLOC_PHY, &dma_info->mem_phy_addr);
-    if (ret) {
-        printf("AXIS_FIFO_GET_MALLOC_PHY ioctl error\n");
-        goto err_2;
-    }
-#endif
-
-    dma_info->mem_vir_base = (unsigned char *)mmap(NULL, dma_info->map_size, PROT_READ | PROT_WRITE, MAP_SHARED, dma_info->mem_fd,  dma_info->mem_phy_addr); 
-    if (dma_info->mem_vir_base == NULL) {
-        printf("phy 0x%x mmap error \n", dma_info->mem_phy_addr);
-        goto err_4;
-    }
-    printf("devicename:%s data vir:0x%x phy:0x%x size:0x%x \n", devicename, dma_info->mem_vir_base, dma_info->mem_phy_addr, dma_info->map_size);
-
-#if 0
-	int fd = open("/dev/mem",O_RDWR);
-	if (fd < 0) {
-		printf("Open /dev/mem read failed with error: %s\n", strerror(errno));
-		fclose(dma_info->mem_fd);
-		goto err_2;
-	}
-
-    dma_info->mem_vir_base = (unsigned char *)mmap(NULL, dma_info->map_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd,  dma_info->mem_phy_addr); 
-    if (dma_info->mem_vir_base == NULL) {
-        printf("phy 0x%x mmap error \n", dma_info->mem_phy_addr);
-        goto err_4;
-    }
-    printf("### devicename:%s data vir:0x%x phy:0x%x size:0x%x \n", devicename, dma_info->mem_vir_base, dma_info->mem_phy_addr, dma_info->map_size);
-	
-	close(fd);
-#endif
-
+    if(registers == MAP_FAILED) { perror("mmap DMA registers"); return -1; }
+    dma_info->dma_base_addr = registers;
+    dma_info->fd = open(devicename, O_RDONLY);
+    if(dma_info->fd < 0) { perror(devicename); goto fail; }
+    if(dma_buffer_map(region, dma_data_size, &dma_info->mem_vir_base,
+                        &dma_info->mem_phy_addr)) goto fail;
+    dma_info->map_size = dma_data_size;
     return 0;
-
-err_4:
-	if(dma_info->mem_vir_base)
-	{
-		munmap(dma_info->mem_vir_base, dma_info->map_size);
-		ret = ioctl(dma_info->fd, AXIS_FIFO_FREE_MALLOC_PHY);
-		if (ret) {
-			printf("AXIS_FIFO_FREE_MALLOC_PHY ioctl error\n");
-		}
-	}
-err_3:
-	close(dma_info->mem_fd);
-err_2:
-	close(dma_info->fd);
-err_1:
-	UnMapAddrPhy2Vir(dma_info->dma_base_addr, addr_info->size);
-	return ret;
+fail:
+    sgdma_exit(dma_info);
+    return -1;
 }
 
-
-
-void sgdma_exit(struct sgdma_info *dma_info)
+void sgdma_exit(struct sgdma_info* dma_info)
 {
-	if(dma_info->mem_vir_base){
-		munmap(dma_info->mem_vir_base, dma_info->map_size);
-		int ret = ioctl(dma_info->fd, AXIS_FIFO_FREE_MALLOC_PHY);
-		if (ret) {
-			printf("AXIS_FIFO_FREE_MALLOC_PHY ioctl error\n");
-		}
-	}
-	if(dma_info->dma_base_addr){
-		UnMapAddrPhy2Vir(dma_info->dma_base_addr, dma_info->addr_info.size);
-	}
-	if(dma_info->mem_fd > 0){
-		close(dma_info->mem_fd);
-	}
-	if(dma_info->fd > 0){
-		close(dma_info->fd);
-	}
-
-	return ;
+    if(!dma_info) return;
+    if(dma_info->mem_vir_base && dma_info->mem_vir_base != MAP_FAILED)
+        dma_buffer_unmap(dma_info->mem_vir_base);
+    if(dma_info->dma_base_addr && dma_info->dma_base_addr != MAP_FAILED)
+        munmap(dma_info->dma_base_addr, dma_info->addr_info.size);
+    if(dma_info->fd >= 0 && dma_info->dma_base_addr) close(dma_info->fd);
+    dma_info->mem_vir_base = NULL;
+    dma_info->dma_base_addr = NULL;
+    dma_info->map_size = 0;
+    dma_info->fd = dma_info->mem_fd = -1;
+    // Data owner fd is released by dma_buffer_unmap after removing the mapping.
 }
 
 void push_mm2s_dma(struct sgdma_info *dma_info, unsigned int offset, int size)

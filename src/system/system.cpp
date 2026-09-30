@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include <errno.h>
 #include <pthread.h>
@@ -24,6 +25,7 @@
 #include <termios.h>
 
 #include "system.h"
+#include "dma_buffer_mem.h"
 #include "ringbuffer.h"
 #include "xutils.h"
 #include "dma_utils.h"
@@ -62,6 +64,19 @@ typedef struct {
 }data_stream_t;
 
 static pthread_mutex_t data_mutex[SGDMA_NUM];
+static bool synthetic_tx_busy[SGDMA_NUM];
+// Production uses the network queue; synthetic TX is opt-in for tests.
+#ifndef ENABLE_SYNTHETIC_DMA_TX
+#define ENABLE_SYNTHETIC_DMA_TX 0
+#endif
+static const bool LOCAL_DMA_BENCHMARK_ENABLED = ENABLE_SYNTHETIC_DMA_TX;
+static const bool NETWORK_DMA_TX_ENABLED = true;
+static const unsigned int SYNTHETIC_TX_SIZE = 2 * 1024 * 1024;
+static const unsigned int SYNTHETIC_FRAME_SIZE = 1024;
+static const uint16_t SYNTHETIC_LOGICAL_CHANNEL = 0;
+static const uint16_t SYNTHETIC_PHYSICAL_CHANNEL = 0;
+static const uint16_t SYNTHETIC_LOGICAL_TYPE = 0;
+static const uint16_t SYNTHETIC_PHYSICAL_TYPE = 0;
 
 struct sgdma_data_info {
 	struct sgdma_info sgdma_tx;
@@ -89,6 +104,108 @@ static struct sgdma_data_info data_info[SGDMA_NUM];
 static struct sgdma_data_info rx_data_info[SGDMA_NUM];
 static unsigned int sgdma_tx_thread_chn[SGDMA_NUM];
 
+// Exclusive receive benchmark access; unavailable if local DMA sending is enabled.
+unsigned char* network_rx_dma_buffer(void)
+{
+    auto* dma = &data_info[0].sgdma_tx;
+	
+    if(LOCAL_DMA_BENCHMARK_ENABLED || !dma->mem_vir_base ||
+       dma->mem_vir_base == MAP_FAILED || dma->map_size < NETWORK_RX_RING_SIZE) {
+ 		 printf("network_rx_dma_buffer:dma->mem_vir_base=%p，dma->map_size:%u\n", dma->mem_vir_base, dma->map_size);
+		 return NULL;
+	   }
+       
+    return dma->mem_vir_base;
+}
+
+// Queue descriptors contain offsets only; payload stays in the mapped DMA memory.
+static const unsigned int NETWORK_DMA_BLOCKS = NETWORK_RX_RING_SIZE / NETWORK_TX_BLOCK_SIZE;
+enum NetworkBlockState { BLOCK_FREE, BLOCK_FILLING, BLOCK_QUEUED, BLOCK_IN_FLIGHT };
+struct NetworkDescriptor { unsigned int offset; unsigned int length; };
+static NetworkBlockState network_blocks[NETWORK_DMA_BLOCKS] = {};
+static NetworkDescriptor network_queue[NETWORK_DMA_BLOCKS];
+static unsigned int network_head = 0, network_tail = 0, network_count = 0;
+static unsigned int network_cursor = 0, network_filled = 0;
+static int network_filling = -1;
+static bool network_dma_busy = false;
+
+int network_dma_reserve(unsigned char** address, unsigned int* length)
+{
+    unsigned char* base = network_rx_dma_buffer();
+    if(!base || !address || !length) return -1;
+    pthread_mutex_lock(&data_mutex[0]);
+    if(data_info[0].dma_stop_flag) {
+        pthread_mutex_unlock(&data_mutex[0]);
+        return 1;
+    }
+    if(network_filling < 0) {
+        if(network_blocks[network_cursor] != BLOCK_FREE) {
+            pthread_mutex_unlock(&data_mutex[0]);
+            return 1;
+        }
+        network_filling = network_cursor;
+        network_blocks[network_cursor] = BLOCK_FILLING;
+        network_filled = 0;
+    }
+    *address = base + network_filling * NETWORK_TX_BLOCK_SIZE + network_filled;
+    unsigned int available = NETWORK_TX_BLOCK_SIZE - network_filled;
+    // The receiver further limits this span to the current request body.
+    *length = available;
+    pthread_mutex_unlock(&data_mutex[0]);
+    return 0;
+}
+
+void network_dma_received(unsigned int bytes)
+{
+    pthread_mutex_lock(&data_mutex[0]);
+    if(network_filling >= 0 && bytes <= NETWORK_TX_BLOCK_SIZE - network_filled) {
+        network_filled += bytes;
+        if(network_filled == NETWORK_TX_BLOCK_SIZE) {
+            network_queue[network_tail] = {static_cast<unsigned int>(network_filling) * NETWORK_TX_BLOCK_SIZE,
+                                           NETWORK_TX_BLOCK_SIZE};
+            network_tail = (network_tail + 1) % NETWORK_DMA_BLOCKS;
+            ++network_count;
+            network_blocks[network_filling] = BLOCK_QUEUED;
+            network_cursor = (network_filling + 1) % NETWORK_DMA_BLOCKS;
+            network_filling = -1;
+            network_filled = 0;
+        }
+    }
+    pthread_mutex_unlock(&data_mutex[0]);
+}
+
+void network_dma_abort_partial(void)
+{
+    pthread_mutex_lock(&data_mutex[0]);
+    if(network_filling >= 0) network_blocks[network_filling] = BLOCK_FREE;
+    network_filling = -1;
+    network_filled = 0;
+    pthread_mutex_unlock(&data_mutex[0]);
+}
+
+static bool network_dma_dequeue(NetworkDescriptor* descriptor)
+{
+    pthread_mutex_lock(&data_mutex[0]);
+    bool ready = network_count && !network_dma_busy && !data_info[0].dma_stop_flag;
+    if(ready) {
+        *descriptor = network_queue[network_head];
+        network_head = (network_head + 1) % NETWORK_DMA_BLOCKS;
+        --network_count;
+        network_blocks[descriptor->offset / NETWORK_TX_BLOCK_SIZE] = BLOCK_IN_FLIGHT;
+        network_dma_busy = true;
+    }
+    pthread_mutex_unlock(&data_mutex[0]);
+    return ready;
+}
+
+static void network_dma_release(const NetworkDescriptor& descriptor)
+{
+    pthread_mutex_lock(&data_mutex[0]);
+    network_blocks[descriptor.offset / NETWORK_TX_BLOCK_SIZE] = BLOCK_FREE;
+    network_dma_busy = false;
+    pthread_mutex_unlock(&data_mutex[0]);
+}
+
 // FILE* fp_write_test = NULL;
 // FILE* fp_net_dma_tx = NULL;
 
@@ -114,18 +231,32 @@ dma_data_rb_err:
 
 void sgdma_mm2s_start(int chn)
 {
-	data_info[chn].dma_stop_flag = 0;
-	data_info[chn].dma_flag = 0;
+    if(chn < 0 || chn >= SGDMA_NUM) return;
+    pthread_mutex_lock(&data_mutex[chn]);
+    data_info[chn].dma_stop_flag = 0;
+    data_info[chn].dma_flag = 0;
+    pthread_mutex_unlock(&data_mutex[chn]);
 }
 
 void sgdma_mm2s_stop(int chn)
 {
-	data_info[chn].dma_stop_flag = 1;
-	data_info[chn].dma_flag = 0;
+    if(chn < 0 || chn >= SGDMA_NUM) return;
+    pthread_mutex_lock(&data_mutex[chn]);
+    data_info[chn].dma_stop_flag = 1;
+    data_info[chn].dma_flag = 0;
+    pthread_mutex_unlock(&data_mutex[chn]);
 }
 
 void is_sgdma_mm2s_stop(int chn)
 {
+    if(chn < 0 || chn >= SGDMA_NUM) return;
+    while(true) {
+        pthread_mutex_lock(&data_mutex[chn]);
+        bool busy = synthetic_tx_busy[chn] || network_dma_busy;
+        pthread_mutex_unlock(&data_mutex[chn]);
+        if(!busy) break;
+        usleep(100);
+    }
 	ring_buffer_t *rb;
 	unsigned int ringbuff_num = 1;
 	rb = data_info[chn].data_stream.dma_data_rb;
@@ -143,25 +274,15 @@ void is_sgdma_mm2s_stop(int chn)
 
 int sgdma_mm2s_query_capacity(Cache_report_inf_t* capacity)
 {
-	ring_buffer_t *rb;
-	unsigned int ringbuff_num;
-	for(int chn_id = 0; chn_id < SGDMA_NUM; chn_id++){
-		rb = data_info[chn_id].data_stream.dma_data_rb;
-		ringbuff_num = ringbuffer_avail(rb);
-//		if((chn_id == 8) || (chn_id == 9)){
-//			printf("chn:%d ringbuff num:%d \n", chn_id, ringbuff_num);
-//		}
-	    if(chn_id >= SGDMA_NUM){
-	    	capacity[chn_id].dmaddr_space = ringbuff_num;
-	    } else {
-	    	capacity[chn_id].dmaddr_space = ringbuff_num;
-	    }
-	}
-	for(int index = 0; index < FREE_SPACE_NUM_MAX; index++)
-	{
-		capacity[index].dmaddr_space = capacity[0].dmaddr_space;
-	}
-	return 0;
+    pthread_mutex_lock(&data_mutex[0]);
+    unsigned int available = 0;
+    for(auto state : network_blocks) if(state == BLOCK_FREE) available += NETWORK_TX_BLOCK_SIZE;
+    if(network_filling >= 0) available += NETWORK_TX_BLOCK_SIZE - network_filled;
+    if(data_info[0].dma_stop_flag) available = 0;
+    pthread_mutex_unlock(&data_mutex[0]);
+    for(int index = 0; index < FREE_SPACE_NUM_MAX; ++index)
+        capacity[index].dmaddr_space = available / ON_DATA_SIZE;
+    return 0;
 }
 
 int sgdma_vfifo_query_capacity(Cache_report_inf_t* capacity)
@@ -344,6 +465,7 @@ int sgdna_tx_init(unsigned char chn_id)
 }
 
 
+#if 0 // Legacy fixed-1-KiB TX path; replaced by sgdma_network_queue_pthread.
 unsigned int sgdma_SelectBlock(unsigned chn_id)
 {
 	int ret;
@@ -595,6 +717,168 @@ void* sgdma_l_tx_pthread(void* arg)
 	}
 }
 
+#endif // Legacy TX
+
+#if ENABLE_SYNTHETIC_DMA_TX
+static void store_be32(unsigned char* dst, uint32_t value)
+{
+    value = htonl(value);
+    memcpy(dst, &value, sizeof(value));
+}
+
+static void store_be16(unsigned char* dst, uint16_t value)
+{
+    value = htons(value);
+    memcpy(dst, &value, sizeof(value));
+}
+
+static void init_synthetic_dma_block(unsigned char* buffer)
+{
+    static_assert(SYNTHETIC_TX_SIZE % SYNTHETIC_FRAME_SIZE == 0, "Whole frames required");
+    for(unsigned int offset = 0; offset < SYNTHETIC_TX_SIZE; offset += SYNTHETIC_FRAME_SIZE) {
+        unsigned char* frame = buffer + offset;
+        memset(frame, 0, 64);
+        store_be32(frame, 0x499602d2);
+        store_be32(frame + 4, 960);
+        store_be16(frame + 16, SYNTHETIC_LOGICAL_CHANNEL);
+        store_be16(frame + 18, SYNTHETIC_PHYSICAL_CHANNEL);
+        store_be16(frame + 20, SYNTHETIC_LOGICAL_TYPE);
+        store_be16(frame + 22, SYNTHETIC_PHYSICAL_TYPE);
+        store_be32(frame + 60, 0x499501d1);
+        for(unsigned int i = 0; i < 960; ++i) frame[64 + i] = static_cast<unsigned char>(i);
+    }
+}
+
+static void update_synthetic_dma_counters(unsigned char* buffer, uint64_t& frame_count)
+{
+    for(unsigned int offset = 0; offset < SYNTHETIC_TX_SIZE;
+        offset += SYNTHETIC_FRAME_SIZE, ++frame_count) {
+        unsigned char* frame = buffer + offset;
+        store_be32(frame + 8, static_cast<uint32_t>(frame_count >> 32));
+        store_be32(frame + 12, static_cast<uint32_t>(frame_count));
+        store_be32(frame + 24, static_cast<uint32_t>(frame_count >> 32));
+        store_be32(frame + 28, static_cast<uint32_t>(frame_count));
+    }
+}
+
+#endif
+
+static double synthetic_elapsed_ms(const struct timespec& start, const struct timespec& end)
+{
+    return (end.tv_sec - start.tv_sec) * 1000.0 + (end.tv_nsec - start.tv_nsec) / 1e6;
+}
+
+#if ENABLE_SYNTHETIC_DMA_TX
+static void* sgdma_synthetic_tx_pthread(void* arg)
+{
+    const unsigned int chn = *static_cast<unsigned int*>(arg);
+    if(chn >= SGDMA_NUM) return NULL;
+    auto* dma = &data_info[chn].sgdma_tx;
+    if(!dma->mem_vir_base || dma->mem_vir_base == MAP_FAILED || dma->map_size < 2 * SYNTHETIC_TX_SIZE) {
+        printf("[DMA TX] chn=%u invalid DMA buffer\n", chn);
+        return NULL;
+    }
+    init_synthetic_dma_block(dma->mem_vir_base);
+    init_synthetic_dma_block(dma->mem_vir_base + SYNTHETIC_TX_SIZE);
+    uint64_t frame_count = 0, packets = 0, total_packets = 0;
+    unsigned int ready_offset = 0;
+    update_synthetic_dma_counters(dma->mem_vir_base, frame_count);
+    bool pending = false;
+    double update_ms = 0, wait_ms = 0;
+    unsigned int updates = 0, wait_calls = 0, timeouts = 0;
+    struct timespec start, now;
+    printf("[DMA TX] chn=%u synthetic data, block=%u bytes, double-buffered, auto-start\n",
+           chn, SYNTHETIC_TX_SIZE);
+    fflush(stdout);
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    while(true) {
+        pthread_mutex_lock(&data_mutex[chn]);
+        bool stopped = data_info[chn].dma_stop_flag != 0;
+        if(!pending && !stopped) synthetic_tx_busy[chn] = true;
+        pthread_mutex_unlock(&data_mutex[chn]);
+        if(!pending && !stopped) {
+            __sync_synchronize();
+            mm2s_dma_enable(dma);
+            push_mm2s_dma(dma, ready_offset, SYNTHETIC_TX_SIZE);
+            pending = true;
+            ready_offset = SYNTHETIC_TX_SIZE - ready_offset;
+            struct timespec before, after;
+            clock_gettime(CLOCK_MONOTONIC, &before);
+            update_synthetic_dma_counters(dma->mem_vir_base + ready_offset, frame_count);
+            clock_gettime(CLOCK_MONOTONIC, &after);
+            update_ms += synthetic_elapsed_ms(before, after);
+            ++updates;
+        }
+        if(pending) {
+            struct timespec before, after;
+            clock_gettime(CLOCK_MONOTONIC, &before);
+            int result = SelectBlock(dma);
+            clock_gettime(CLOCK_MONOTONIC, &after);
+            wait_ms += synthetic_elapsed_ms(before, after);
+            ++wait_calls;
+            if(result == 0) ++timeouts;
+            // Timeout retains DMA ownership: never reuse the active buffer early.
+            if(result > 0) {
+                mm2s_dma_disable(dma);
+                pending = false;
+                ++packets;
+                ++total_packets;
+                pthread_mutex_lock(&data_mutex[chn]);
+                synthetic_tx_busy[chn] = false;
+                pthread_mutex_unlock(&data_mutex[chn]);
+            }
+        } else usleep(1000);
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        double elapsed = synthetic_elapsed_ms(start, now) / 1000.0;
+        if(elapsed >= 2.0) {
+            pthread_mutex_lock(&data_mutex[chn]);
+            stopped = data_info[chn].dma_stop_flag != 0;
+            pthread_mutex_unlock(&data_mutex[chn]);
+            double rate = packets * double(SYNTHETIC_TX_SIZE) / elapsed;
+            printf("[DMA TX] chn=%u block=%u bytes %.2f MiB/s %.2f Mbit/s "
+                   "packets=%llu total=%llu pending=%d stopped=%d "
+                   "update_ms=%.3f update_avg_ms=%.3f updates=%u "
+                   "wait_ms=%.3f wait_avg_ms=%.3f wait_calls=%u timeouts=%u\n",
+                   chn, SYNTHETIC_TX_SIZE, rate / 1048576.0, rate * 8.0 / 1e6,
+                   (unsigned long long)packets, (unsigned long long)total_packets, pending, stopped,
+                   update_ms, updates ? update_ms / updates : 0.0, updates,
+                   wait_ms, wait_calls ? wait_ms / wait_calls : 0.0, wait_calls, timeouts);
+            fflush(stdout);
+            packets = 0;
+            update_ms = wait_ms = 0;
+            updates = wait_calls = timeouts = 0;
+            start = now;
+        }
+    }
+    return NULL;
+}
+
+#endif
+
+static void* sgdma_network_queue_pthread(void* arg)
+{
+    auto* dma = &data_info[0].sgdma_tx;
+    NetworkDescriptor descriptor = {};
+    bool pending = false;
+    while(true) {
+        if(!pending && network_dma_dequeue(&descriptor)) {
+            __sync_synchronize();
+            mm2s_dma_enable(dma);
+            push_mm2s_dma(dma, descriptor.offset, descriptor.length);
+            pending = true;
+        }
+        if(pending) {
+            int result = SelectBlock(dma);
+            if(result > 0) {
+                mm2s_dma_disable(dma);
+                network_dma_release(descriptor);
+                pending = false;
+            }
+        } else usleep(100);
+    }
+    return NULL;
+}
+
 int system_init(void)
 {
 	int ret;
@@ -631,23 +915,19 @@ int system_init(void)
 		if(ret < 0){
 			printf("sgdma%d tx init error \n", num);
 			return 2;
-		} else if(!ret){
+		} else if(!ret && (LOCAL_DMA_BENCHMARK_ENABLED || NETWORK_DMA_TX_ENABLED)){
 			sgdma_tx_thread_chn[num] = (unsigned int)num;
-			if(num < SGDMA_NUM){
-				ret = pthread_create(&sgdma_tid[num], &attr, sgdma_h_tx_pthread,
-								 &sgdma_tx_thread_chn[num]);
-				if(ret != 0){
-					printf("[Debug] sgdma_h_tx_pthread create error \n");
-					return 3;
-				}
-			} else {
-				ret = pthread_create(&sgdma_tid[num], NULL, sgdma_l_tx_pthread,
-								 &sgdma_tx_thread_chn[num]);
-				if(ret != 0){
-					printf("[Debug] sgdma_l_tx_pthread create error \n");
-					return 3;
-				}
-			}
+#if ENABLE_SYNTHETIC_DMA_TX
+            auto worker = sgdma_synthetic_tx_pthread;
+#else
+            auto worker = sgdma_network_queue_pthread;
+#endif
+            ret = pthread_create(&sgdma_tid[num], &attr, worker, &sgdma_tx_thread_chn[num]);
+            if(ret != 0) {
+                printf("[DMA TX] worker create error: %d\n", ret);
+                pthread_attr_destroy(&attr);
+                return 3;
+            }
 		}
 		usleep(10000);
 	}
@@ -798,6 +1078,7 @@ static void *zmuav_pl2ps_irq_recv_pthread(void* parameter)
     return NULL;
 }
 
+#if DATA_PORT_BENCHMARK_MODE
 static void *synthetic_dma_rx_pthread(void* parameter)
 {
 	(void)parameter;
@@ -834,6 +1115,8 @@ static void *synthetic_dma_rx_pthread(void* parameter)
 
 	return NULL;
 }
+
+#endif
 
 unsigned int last1_done_cnt = 0;
 int recv_dma(unsigned char* addr)

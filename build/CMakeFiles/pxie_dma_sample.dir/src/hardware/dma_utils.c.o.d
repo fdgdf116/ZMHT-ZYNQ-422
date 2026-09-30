@@ -104,4 +104,4 @@ CMakeFiles/pxie_dma_sample.dir/src/hardware/dma_utils.c.o: \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/termios.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/include/common/common.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_utils.h \
- /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/zmuav_wrmem.h
+ /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_buffer_mem.h

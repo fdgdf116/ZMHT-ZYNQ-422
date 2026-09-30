@@ -168,6 +168,8 @@ CMakeFiles/pxie_dma_sample.dir/src/network/sync_send.cpp.o: \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/bits/parse_numbers.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/termios.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/termios.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/sys/uio.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/uio-ext.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/thread \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/memory \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/bits/stl_algobase.h \

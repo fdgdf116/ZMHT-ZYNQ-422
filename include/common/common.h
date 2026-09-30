@@ -12,6 +12,11 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+// Disable 1553B allocation, service and command handlers during DMA benchmarking.
+#ifndef ENABLE_1553B
+#define ENABLE_1553B 0
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

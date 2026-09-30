@@ -266,6 +266,8 @@ CMakeFiles/pxie_dma_sample.dir/src/main.cpp.o: \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/termios.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/termios.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/network/tcp_socket.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/sys/uio.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/uio-ext.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/fifo_engine.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/include/common/common.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/system/system.h \
