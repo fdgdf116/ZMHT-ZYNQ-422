@@ -105,7 +105,6 @@ static int axififo_data_send(int fifo_id, unsigned char mode, unsigned char* dat
 */
 static void axififo_send(int fifo_id, unsigned char mode, unsigned int data)
 {
-    if(!g_axififo_info || fifo_id < 0 || fifo_id >= FIFO_NUM) return;
 	int ret;
 	unsigned int send_size;
 	uartlist_send_info_t send_info;
@@ -148,7 +147,6 @@ static void axififo_send(int fifo_id, unsigned char mode, unsigned int data)
 */
 static int axififo_data_send(int fifo_id, unsigned char mode, unsigned char* data,int len)
 {
-    if(!g_axififo_info || fifo_id < 0 || fifo_id >= FIFO_NUM || !data || len <= 0) return -1;
 	int ret;
 	unsigned int send_size;
 	uint8_t* buff = (uint8_t*)malloc(len + 8);
@@ -176,14 +174,12 @@ static int axififo_data_send(int fifo_id, unsigned char mode, unsigned char* dat
 
 int axififo_get_send_size(int fifo_id)
 {
-    if(!g_axififo_info || fifo_id < 0 || fifo_id >= FIFO_NUM) return 0;
 	unsigned int free_size = g_axififo_info->fifo_reg[fifo_id].cfg->TDFV;
 	return free_size;
 }
 
 int axififo_pure_data_send(int fifo_id, unsigned char* data,int len)
 {
-    if(!g_axififo_info || fifo_id < 0 || fifo_id >= FIFO_NUM || !data || len <= 0) return -1;
 	int ret;
 	unsigned int send_size;
 
@@ -287,11 +283,9 @@ static int axififo_recv_data_analysis(unsigned char *buffer, unsigned int length
 
 int rx_fifo_data_get(unsigned char chn_id, u_int8_t** data)
 {
-    if(!g_axififo_info || chn_id >= FIFO_NUM || !data) return 0;
     image_frame_info_t frame_info;
     ring_buffer_t *rb;
     int len = 0;
-    static unsigned long ringbuffer_full_cnt = 0;
     struct fifo_data_info_t *fifo_data_info = &g_axififo_info->fifo_data_info[chn_id];
     
     if(chn_id >= FIFO_NUM || !fifo_data_info || !data) {
@@ -306,11 +300,6 @@ int rx_fifo_data_get(unsigned char chn_id, u_int8_t** data)
     }
     
     if(ringbuffer_is_empty(rb)) {
-        if((ringbuffer_full_cnt % 100000) == 0){
-            // printf("fifo%d ringbuffer empty cnt:%ld \n", chn_id, ringbuffer_full_cnt);
-        }
-        usleep(10);
-        ringbuffer_full_cnt += 1;
         return 0;
     }
     
@@ -327,45 +316,109 @@ int rx_fifo_data_get(unsigned char chn_id, u_int8_t** data)
 
 int fifo_memcpy_rb_avail(unsigned char chn_id)
 {
-    if(!g_axififo_info || chn_id >= FIFO_NUM) return 0;
 	struct fifo_data_info_t *fifo_data_info = &g_axififo_info->fifo_data_info[chn_id];
 	return ringbuffer_avail(fifo_data_info->fifo_data_rb);
 }
 
 void fifo_memcpy_data(unsigned char chn_id, unsigned char* data, int size)
 {
-    if(!g_axififo_info || chn_id >= FIFO_NUM || !data || size <= 0) return;
-    auto* fifo = &g_axififo_info->fifo_data_info[chn_id];
-    ring_buffer_t* rb = fifo->fifo_data_rb;
-    if(!rb || !fifo->data) return;
-    image_frame_info_t frame_info;
-    while(size > 0) {
-        int chunk = size > AXIFIFO_RX_PAYLOAD_MAX ? AXIFIFO_RX_PAYLOAD_MAX : size;
-        if(fifo->ringbuf_offset + AXI_FIFO_BUF_UNIT_SIZE > fifo->map_size)
-            fifo->ringbuf_offset = 0;
-        while(ringbuffer_is_full(rb)) usleep(10);
-        memcpy(fifo->data + fifo->ringbuf_offset, data, (size_t)chunk);
-        frame_info.frame_offset = fifo->ringbuf_offset;
-        frame_info.frame_size = chunk;
-        pcie_data_to_queue(rb, &frame_info);
-        fifo->ringbuf_offset += AXI_FIFO_BUF_UNIT_SIZE;
-        ++fifo->ringbuf_count;
-        data += chunk;
-        size -= chunk;
-    }
+	image_frame_info_t frame_info;
+
+	ring_buffer_t *rb;
+	unsigned char* fifo_addr;
+	unsigned long ringbuffer_full_cnt = 0;
+
+	if(g_axififo_info == NULL || data == NULL || size <= 0 || chn_id >= FIFO_NUM){
+		printf("[%s] invalid input chn:%d size:%d (max chn:%d)\n",
+		       __func__, chn_id, size, FIFO_NUM);
+		return ;
+	}
+
+	struct fifo_data_info_t *fifo_data_info = &g_axififo_info->fifo_data_info[chn_id];
+	rb = fifo_data_info->fifo_data_rb;
+	if(rb == NULL || fifo_data_info->data == NULL) {
+		printf("[%s] chn:%d FIFO buffer is not initialized\n", __func__, chn_id);
+		return;
+	}
+
+
+#if 0
+	unsigned int ringbuff_num;
+	unsigned int ringbuff_num_max;
+	while(1){
+		ringbuff_num = ringbuffer_len(rb);
+	    if((chn_id == 8) || (chn_id == 9)){
+	    	ringbuff_num_max = DMA_DATA_PKG_MAX_H;
+	    } else {
+	    	ringbuff_num_max = DMA_DATA_PKG_MAX_L;
+	    }
+
+	    if((ringbuff_num + DMA_RINGBUFFER_NUM_MAX) > ringbuff_num_max){
+	        usleep(10);
+	        ringbuffer_full_cnt += 1;
+	    } else {
+	    	break;
+	    }
+
+    	if((ringbuffer_full_cnt % 10000) == 0){
+    		printf("[%s,%d] chn%d ringbuffer full cnt:%ld \n",__func__,__LINE__, chn_id, ringbuffer_full_cnt);
+    	}
+	}
+#else
+
+
+#endif
+	/*
+	 * A software FIFO slot is 512 bytes, while the wire protocol reserves
+	 * four bytes (the historical limit was 508 bytes).  Hardware RDFO can
+	 * report more than one slot at a time (for example 514 bytes).  Queue the
+	 * complete input as several slots instead of dropping the whole batch.
+	 */
+	while(size > 0) {
+		int chunk_size = size;
+		if(chunk_size > AXIFIFO_RX_PAYLOAD_MAX) {
+			chunk_size = AXIFIFO_RX_PAYLOAD_MAX;
+		}
+
+		if(fifo_data_info->ringbuf_offset + AXI_FIFO_BUF_UNIT_SIZE > fifo_data_info->map_size){
+			fifo_data_info->ringbuf_offset = 0;
+		}
+
+		while(ringbuffer_is_full(rb)) {
+			/* Let the network sender release a descriptor instead of busy-spinning. */
+			if((ringbuffer_full_cnt % 10000) == 0) {
+				printf("[%s,%d] chn%d ringbuffer full cnt:%ld \n",
+				       __func__, __LINE__, chn_id, ringbuffer_full_cnt);
+			}
+			usleep(10);
+			++ringbuffer_full_cnt;
+		}
+
+		fifo_addr = fifo_data_info->data + fifo_data_info->ringbuf_offset;
+		memcpy(fifo_addr, data, (size_t)chunk_size);
+
+		frame_info.frame_offset = fifo_data_info->ringbuf_offset;
+		frame_info.frame_size = chunk_size;
+		pcie_data_to_queue(rb, &frame_info);
+
+		fifo_data_info->ringbuf_offset += AXI_FIFO_BUF_UNIT_SIZE;
+		fifo_data_info->ringbuf_count += 1;
+		data += chunk_size;
+		size -= chunk_size;
+	}
 }
 
 int fifo_tx_try_memcpy_data(unsigned char chn_id, unsigned char* data, int size)
 {
     if(!g_axififo_info || chn_id >= FIFO_NUM || !data || size <= 0 || size > 508)
         return -1;
-    auto* fifo = &g_axififo_info->fifo_tx_data_info[chn_id];
+    struct fifo_data_info_t* fifo = &g_axififo_info->fifo_tx_data_info[chn_id];
     ring_buffer_t* rb = fifo->fifo_data_rb;
-    if(!rb || !fifo->data || fifo->map_size < AXI_FIFO_BUF_UNIT_SIZE) return -1;
+    if(!rb || !fifo->data) return -1;
     if(ringbuffer_is_full(rb)) return 1;
     if(fifo->ringbuf_offset + AXI_FIFO_BUF_UNIT_SIZE > fifo->map_size)
         fifo->ringbuf_offset = 0;
-    memcpy(fifo->data + fifo->ringbuf_offset, data, size);
+    memcpy(fifo->data + fifo->ringbuf_offset, data, (size_t)size);
     image_frame_info_t frame_info;
     frame_info.frame_offset = fifo->ringbuf_offset;
     frame_info.frame_size = size;
@@ -377,38 +430,144 @@ int fifo_tx_try_memcpy_data(unsigned char chn_id, unsigned char* data, int size)
 
 void fifo_tx_memcpy_data(unsigned char chn_id, unsigned char* data, int size)
 {
-    while(fifo_tx_try_memcpy_data(chn_id, data, size) == 1) usleep(10);
+	image_frame_info_t frame_info;
+
+	ring_buffer_t *rb;
+	unsigned char* fifo_addr;
+	unsigned long ringbuffer_full_cnt = 0;
+	struct fifo_data_info_t *fifo_data_info = &g_axififo_info->fifo_tx_data_info[chn_id];
+
+	if(size>508)
+	{
+		printf("[%s %d] chn:%d size(%d) > 508 error \n", __func__, __LINE__, chn_id, size);
+		return ;
+	}
+
+	if(chn_id >= FIFO_NUM){
+		printf("[%s] chn id(%d) >= chn max(%d) error \n", __func__, chn_id, FIFO_NUM);
+		return ;
+	}
+
+	rb = fifo_data_info->fifo_data_rb;
+
+
+#if 0
+	unsigned int ringbuff_num;
+	unsigned int ringbuff_num_max;
+	while(1){
+		ringbuff_num = ringbuffer_len(rb);
+	    if((chn_id == 8) || (chn_id == 9)){
+	    	ringbuff_num_max = DMA_DATA_PKG_MAX_H;
+	    } else {
+	    	ringbuff_num_max = DMA_DATA_PKG_MAX_L;
+	    }
+
+	    if((ringbuff_num + DMA_RINGBUFFER_NUM_MAX) > ringbuff_num_max){
+	        usleep(10);
+	        ringbuffer_full_cnt += 1;
+	    } else {
+	    	break;
+	    }
+
+    	if((ringbuffer_full_cnt % 10000) == 0){
+    		printf("[%s,%d] chn%d ringbuffer full cnt:%ld \n",__func__,__LINE__, chn_id, ringbuffer_full_cnt);
+    	}
+	}
+#else
+    while(ringbuffer_is_full(rb)) {
+    	if((ringbuffer_full_cnt % 10000) == 0){
+    		printf("[%s,%d] chn%d ringbuffer full cnt:%ld \n",__func__,__LINE__, chn_id, ringbuffer_full_cnt);
+    	}
+        usleep(10);
+        ringbuffer_full_cnt += 1;
+    }
+#endif
+	if(fifo_data_info->ringbuf_offset + AXI_FIFO_BUF_UNIT_SIZE > fifo_data_info->map_size){
+		fifo_data_info->ringbuf_offset = 0;
+	}
+
+	fifo_addr = fifo_data_info->data + fifo_data_info->ringbuf_offset;
+	memcpy(fifo_addr, data, size);
+
+	// frame_info.frame_index = fifo_data_info->ringbuf_count;
+	frame_info.frame_offset = fifo_data_info->ringbuf_offset;
+	frame_info.frame_size = size;
+	pcie_data_to_queue(rb, &frame_info);
+
+	// data_info[chn_id].dma_stop_flag = 0;
+
+	fifo_data_info->ringbuf_offset += AXI_FIFO_BUF_UNIT_SIZE;
+	fifo_data_info->ringbuf_count += 1;
 }
 
+/*
+	函数: static void *axififo_recv_data_pthread(void* parameter)
+	作用: 数据接收线程
+	参数:
+		parameter:线程参数
+	返回值:
+		线程返回值
+*/
 static void *axififo_recv_data_pthread(void* parameter)
 {
-    unsigned char recv_buffer[AXIFIFO_RECV_DATA_SIZE];
-    while(1) {
-        for(int fifo_id = 0; fifo_id < FIFO_NUM; ++fifo_id) {
-            int free_slots = fifo_memcpy_rb_avail(fifo_id);
-            if(free_slots == 0) continue;
-            int recv_cnt = stream_fifo_read_data_len(&g_axififo_info->fifo_reg[fifo_id]);
-            if(recv_cnt <= 0) continue;
-            if(recv_cnt > (int)sizeof(recv_buffer)) recv_cnt = sizeof(recv_buffer);
-            int capacity = free_slots * AXIFIFO_RX_PAYLOAD_MAX;
-            if(recv_cnt > capacity) recv_cnt = capacity;
-            stream_fifo_read_data(&g_axififo_info->fifo_reg[fifo_id], recv_buffer, recv_cnt);
-            fifo_memcpy_data(fifo_id, recv_buffer, recv_cnt);
-        }
-        usleep(1000);
-    }
-    return NULL;
+	int recv_cnt;
+	unsigned char RecvBuffer[AXIFIFO_RECV_DATA_SIZE];
+	while(1){
+		for(int fifo_id = 0;fifo_id < FIFO_NUM;fifo_id++){
+			int free_slots = fifo_memcpy_rb_avail(fifo_id);
+			/*
+			读fifo长度
+			./reg_rw /dev/xdma0_control 0x40024
+			*/
+			if(free_slots == 0)
+				continue;
+			recv_cnt = stream_fifo_read_data_len(&g_axififo_info->fifo_reg[fifo_id]);
+			if(recv_cnt > 0){
+				/* RDFO is occupancy, not a protocol-frame length.  Read as much
+				 * as fits in the temporary buffer; fifo_memcpy_data() splits it
+				 * into <=508-byte software slots without dropping the remainder. */
+				if(recv_cnt > (int)sizeof(RecvBuffer)) {
+					recv_cnt = sizeof(RecvBuffer);
+				}
+				/* Do not consume more hardware data than the software ring can
+				 * queue without blocking this thread on the next chunk. */
+				int slot_capacity = free_slots * AXIFIFO_RX_PAYLOAD_MAX;
+				if(recv_cnt > slot_capacity) {
+					recv_cnt = slot_capacity;
+				}
+				// printf("func:%s line:%d recv_cnt:%d \n",__func__,__LINE__, recv_cnt);
+				/*
+				读数据
+				./reg_rw /dev/xdma0_control 0x51000
+				*/
+				stream_fifo_read_data(&g_axififo_info->fifo_reg[fifo_id], RecvBuffer, recv_cnt);
+				// SyncSend::GetInstance()->Send((char *)RecvBuffer, recv_cnt);
+				// fwrite(RecvBuffer, 1, recv_cnt, fp_fifo_rx);
+				// fflush(fp_fifo_rx);
+				fifo_memcpy_data(fifo_id, RecvBuffer, recv_cnt);
+			}
+			//usleep(10);
+		}
+		usleep(1000);
+	}
+
+	return NULL;
 }
 
 int axififo_recv(unsigned int fifo_id, unsigned char* data)
 {
-    if(!g_axififo_info || fifo_id >= FIFO_NUM || !data) return -1;
+	if(g_axififo_info == NULL || data == NULL || fifo_id >= FIFO_NUM) {
+		return 0;
+	}
 		/*
 		读fifo长度
 		./reg_rw /dev/xdma0_control 0x40024
 		*/
 		int recv_cnt = stream_fifo_read_data_len(&g_axififo_info->fifo_reg[fifo_id]);
 		if(recv_cnt > 0){
+			if(recv_cnt > AXIFIFO_RECV_DATA_SIZE) {
+				recv_cnt = AXIFIFO_RECV_DATA_SIZE;
+			}
 			/*
 			读数据
 			./reg_rw /dev/xdma0_control 0x51000
@@ -695,9 +854,6 @@ void axififo_data_destory(void)
 
 int axififo_query_capacity(Cache_report_inf_t* capacity)
 {
-    if(!capacity) return -1;
-    for(int i = 0; i < FREE_SPACE_NUM_MAX; ++i) capacity[i].axififo_space = 0;
-    if(!g_axififo_info) return -1;
 	int ret = 1;
 	struct fifo_data_info_t* fifo_data_info = NULL;
 

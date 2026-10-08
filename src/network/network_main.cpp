@@ -150,7 +150,6 @@ void NetServer::DataServiceLoop(Thread *thread){
             MutexScopedLocker locker(data_client_mutex_);
             client_data_ = connection;
         }
-        uint64_t bytes = 0;
         Request header = {};
         static_assert(sizeof(Request) == 16, "9016 request header must be 16 bytes");
         unsigned int header_received = 0;
@@ -163,9 +162,6 @@ void NetServer::DataServiceLoop(Thread *thread){
         unsigned int fifo_enqueued = 0;
         unsigned int fifo_filled = 0;
         bool socket_readable = false;
-        uint64_t recv_calls = 0, poll_calls = 0;
-        struct timespec start, now;
-        clock_gettime(CLOCK_MONOTONIC, &start);
         while(!thread_.IsInterrupted()) {
             // Receive the entire FIFO request before publishing any chunk.
             // Keep the completed request while a full queue applies backpressure.
@@ -190,7 +186,6 @@ void NetServer::DataServiceLoop(Thread *thread){
             int ready = 1;
             if(!socket_readable) {
                 fd.revents = 0;
-                ++poll_calls;
                 ready = poll(&fd, 1, 100);
             }
             if(ready < 0) {
@@ -227,7 +222,6 @@ void NetServer::DataServiceLoop(Thread *thread){
                         if(data_peer_closed(connection)) break;
                         usleep(1000);
                     } else {
-                        ++recv_calls;
                         int received = recv(connection->GetSocketId(), destination, length, MSG_DONTWAIT);
                         if(received <= 0) {
                             if(received < 0 && errno == EINTR) continue;
@@ -288,7 +282,6 @@ void NetServer::DataServiceLoop(Thread *thread){
                             body_remaining -= received;
                         } else {
                             body_remaining -= received;
-                            bytes += received;
                             offset = static_cast<unsigned int>(destination - buffer) + received;
                             network_dma_received(received);
                             if(offset == NETWORK_RX_RING_SIZE) {
@@ -298,24 +291,6 @@ void NetServer::DataServiceLoop(Thread *thread){
                         }
                     }
                 } else if(fd.revents & (POLLERR | POLLHUP | POLLNVAL)) break;
-            }
-            clock_gettime(CLOCK_MONOTONIC, &now);
-            double seconds = (now.tv_sec - start.tv_sec) + (now.tv_nsec - start.tv_nsec) / 1e9;
-            if(seconds >= 2.0) {
-                if(bytes) {
-                    double rate = bytes / seconds;
-                    printf("[NET 9016 RX] "
-                           "devmem-queued"
-                           " payload %.2f MiB/s %.2f Mbit/s bytes=%llu interval=%.3fs buffer_bytes=%u offset=%u wraps=%llu recv_calls=%llu poll_calls=%llu\n",
-                           rate / 1048576.0, rate * 8.0 / 1e6,
-                           (unsigned long long)bytes, seconds, NETWORK_RX_RING_SIZE, offset,
-                           (unsigned long long)wraps, (unsigned long long)recv_calls,
-                           (unsigned long long)poll_calls);
-                    fflush(stdout);
-                }
-                bytes = 0;
-                recv_calls = poll_calls = 0;
-                start = now;
             }
         }
         network_dma_abort_partial();
