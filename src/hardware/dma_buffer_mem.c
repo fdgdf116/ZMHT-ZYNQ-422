@@ -13,6 +13,7 @@
 #include <sys/ioctl.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 struct allocation {
     unsigned char* address;
     unsigned int length;
@@ -96,6 +97,39 @@ int dma_buffer_map(enum dma_buffer_region region, unsigned int bytes,
 fail:
     if(allocated) release_owner(owner);
     else close(owner);
+    return -1;
+}
+
+/* Monotonic time in microseconds, matching the supplied cache test. */
+static uint64_t now_us(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000u + ts.tv_nsec / 1000u;
+}
+
+/* Keep the original function name and parameters from the cache test. */
+int do_sync(int fd, unsigned long cmd, uint32_t off, uint32_t size,
+                   uint64_t *cost_us)
+{
+    struct cache_sync s = { .offset = off, .size = size };
+    uint64_t t0 = now_us();
+    int ret = ioctl(fd, cmd, &s);
+    int saved_errno = errno;
+
+    if(cost_us)
+        *cost_us = now_us() - t0;
+    errno = saved_errno;
+    return ret;
+}
+
+int dma_buffer_owner_fd(unsigned char* address)
+{
+    for(unsigned int i = 0; i < DMA_BUFFER_COUNT; ++i) {
+        if(address && allocations[i].address == address)
+            return allocations[i].owner_fd;
+    }
+    errno = EINVAL;
     return -1;
 }
 

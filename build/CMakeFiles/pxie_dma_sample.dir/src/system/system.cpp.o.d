@@ -269,6 +269,7 @@ CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o: \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/system/system.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/include/common/common.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_buffer_mem.h \
+ /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/zmuav_wrmem.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/ringbuffer.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/lib/gcc/arm-linux-gnueabihf/7.2.1/include/stdbool.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/xutils.h \

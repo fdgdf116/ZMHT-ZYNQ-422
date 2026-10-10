@@ -26,6 +26,7 @@
 
 #include "system.h"
 #include "dma_buffer_mem.h"
+#include "zmuav_wrmem.h"
 #include "ringbuffer.h"
 #include "xutils.h"
 #include "dma_utils.h"
@@ -856,14 +857,98 @@ static void* sgdma_synthetic_tx_pthread(void* arg)
 
 #endif
 
+// Temporarily disable SD capture while testing cache sync and DMA transmission.
+#ifndef ENABLE_NETWORK_DMA_SD_CAPTURE
+#define ENABLE_NETWORK_DMA_SD_CAPTURE 0
+#endif
+
+#if ENABLE_NETWORK_DMA_SD_CAPTURE
+// Diagnostic capture: persist the exact mapped range before submitting MM2S.
+#ifndef NETWORK_DMA_CAPTURE_ROOT
+#define NETWORK_DMA_CAPTURE_ROOT "/media/mmcblk0p1"
+#endif
+struct NetworkDmaCapture {
+    int fd;
+    unsigned int part;
+    uint64_t bytes;
+    char directory[512];
+    NetworkDmaCapture() : fd(-1), part(0), bytes(0), directory{} {}
+    ~NetworkDmaCapture() { if(fd >= 0) close(fd); }
+};
+
+static bool network_dma_capture(NetworkDmaCapture& capture, const unsigned char* data,
+                                unsigned int length)
+{
+    const uint64_t part_limit = UINT64_C(1024) * 1024 * 1024;
+    if(!capture.directory[0]) {
+        int count = snprintf(capture.directory, sizeof(capture.directory),
+                             "%s/dma_tx_capture_XXXXXX", NETWORK_DMA_CAPTURE_ROOT);
+        if(count < 0 || static_cast<size_t>(count) >= sizeof(capture.directory)) {
+            errno = ENAMETOOLONG;
+            return false;
+        }
+        if(!mkdtemp(capture.directory)) return false;
+        printf("[DMA CAPTURE] directory=%s, raw payload, 1 GiB per file\n", capture.directory);
+        fflush(stdout);
+    }
+    if(capture.fd >= 0 && capture.bytes + length > part_limit) {
+        int result = close(capture.fd);
+        capture.fd = -1;
+        if(result != 0) return false;
+        ++capture.part;
+        capture.bytes = 0;
+    }
+    if(capture.fd < 0) {
+        char path[576];
+        snprintf(path, sizeof(path), "%s/part_%06u.bin", capture.directory, capture.part);
+        capture.fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0644);
+        if(capture.fd < 0) return false;
+    }
+    unsigned int written = 0;
+    while(written < length) {
+        ssize_t result = write(capture.fd, data + written, length - written);
+        if(result < 0 && errno == EINTR) continue;
+        if(result <= 0) {
+            if(result == 0) errno = EIO;
+            return false;
+        }
+        written += static_cast<unsigned int>(result);
+    }
+    int result;
+    do { result = fsync(capture.fd); } while(result < 0 && errno == EINTR);
+    if(result != 0) return false;
+    capture.bytes += length;
+    return true;
+}
+#endif
+
 static void* sgdma_network_queue_pthread(void* arg)
 {
     auto* dma = &data_info[0].sgdma_tx;
     NetworkDescriptor descriptor = {};
+#if ENABLE_NETWORK_DMA_SD_CAPTURE
+    NetworkDmaCapture capture;
+#endif
     bool pending = false;
     while(true) {
         if(!pending && network_dma_dequeue(&descriptor)) {
-            __sync_synchronize();
+#if ENABLE_NETWORK_DMA_SD_CAPTURE
+            if(!network_dma_capture(capture, dma->mem_vir_base + descriptor.offset,
+                                    descriptor.length)) {
+                perror("[DMA CAPTURE] SD write failed; DMA worker stopped, block retained");
+                return NULL;
+            }
+#endif
+            bool sync_error_reported = false;
+            while(do_sync(dma->mem_fd, AXIS_FIFO_SYNC_FOR_DEVICE,
+                          descriptor.offset, descriptor.length, NULL) != 0) {
+                if(!sync_error_reported) {
+                    perror("[DMA TX] cache sync failed; retaining block and retrying");
+                    sync_error_reported = true;
+                }
+                usleep(10000);
+            }
+           // __sync_synchronize();
             mm2s_dma_enable(dma);
             push_mm2s_dma(dma, descriptor.offset, descriptor.length);
             pending = true;

@@ -46,6 +46,9 @@ int sgdma_init(int chn_id, const char* devicename, struct dma_addr_info* addr_in
     if(dma_info->fd < 0) { perror(devicename); goto fail; }
     if(dma_buffer_map(region, dma_data_size, &dma_info->mem_vir_base,
                         &dma_info->mem_phy_addr)) goto fail;
+    // Borrow the wrmem allocator fd for cache ioctl; unmap owns its close.
+    dma_info->mem_fd = dma_buffer_owner_fd(dma_info->mem_vir_base);
+    if(dma_info->mem_fd < 0) goto fail;
     dma_info->map_size = dma_data_size;
     return 0;
 fail:
