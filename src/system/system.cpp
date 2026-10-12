@@ -121,11 +121,14 @@ unsigned char* network_rx_dma_buffer(void)
 
 // Queue descriptors contain offsets only; payload stays in the mapped DMA memory.
 static const unsigned int NETWORK_DMA_BLOCKS = NETWORK_RX_RING_SIZE / NETWORK_TX_BLOCK_SIZE;
-enum NetworkBlockState { BLOCK_FREE, BLOCK_FILLING, BLOCK_QUEUED, BLOCK_IN_FLIGHT };
+enum NetworkBlockState { BLOCK_FREE, BLOCK_FILLING, BLOCK_QUEUED, BLOCK_SYNCING, BLOCK_READY, BLOCK_IN_FLIGHT };
 struct NetworkDescriptor { unsigned int offset; unsigned int length; };
 static NetworkBlockState network_blocks[NETWORK_DMA_BLOCKS] = {};
 static NetworkDescriptor network_queue[NETWORK_DMA_BLOCKS];
 static unsigned int network_head = 0, network_tail = 0, network_count = 0;
+static NetworkDescriptor network_ready_queue[NETWORK_DMA_BLOCKS];
+static unsigned int network_ready_head = 0, network_ready_tail = 0, network_ready_count = 0;
+static pthread_cond_t network_sync_cond = PTHREAD_COND_INITIALIZER;
 static unsigned int network_cursor = 0, network_filled = 0;
 static int network_filling = -1;
 static bool network_dma_busy = false;
@@ -166,6 +169,7 @@ void network_dma_received(unsigned int bytes)
                                            NETWORK_TX_BLOCK_SIZE};
             network_tail = (network_tail + 1) % NETWORK_DMA_BLOCKS;
             ++network_count;
+            pthread_cond_signal(&network_sync_cond);
             network_blocks[network_filling] = BLOCK_QUEUED;
             network_cursor = (network_filling + 1) % NETWORK_DMA_BLOCKS;
             network_filling = -1;
@@ -184,14 +188,38 @@ void network_dma_abort_partial(void)
     pthread_mutex_unlock(&data_mutex[0]);
 }
 
+// The cache worker owns a filled block until it publishes it to the ready queue.
+static NetworkDescriptor network_dma_sync_dequeue()
+{
+    pthread_mutex_lock(&data_mutex[0]);
+    while(!network_count || data_info[0].dma_stop_flag)
+        pthread_cond_wait(&network_sync_cond, &data_mutex[0]);
+    NetworkDescriptor descriptor = network_queue[network_head];
+    network_head = (network_head + 1) % NETWORK_DMA_BLOCKS;
+    --network_count;
+    network_blocks[descriptor.offset / NETWORK_TX_BLOCK_SIZE] = BLOCK_SYNCING;
+    pthread_mutex_unlock(&data_mutex[0]);
+    return descriptor;
+}
+
+static void network_dma_sync_publish(const NetworkDescriptor& descriptor)
+{
+    pthread_mutex_lock(&data_mutex[0]);
+    network_ready_queue[network_ready_tail] = descriptor;
+    network_ready_tail = (network_ready_tail + 1) % NETWORK_DMA_BLOCKS;
+    ++network_ready_count;
+    network_blocks[descriptor.offset / NETWORK_TX_BLOCK_SIZE] = BLOCK_READY;
+    pthread_mutex_unlock(&data_mutex[0]);
+}
+
 static bool network_dma_dequeue(NetworkDescriptor* descriptor)
 {
     pthread_mutex_lock(&data_mutex[0]);
-    bool ready = network_count && !network_dma_busy && !data_info[0].dma_stop_flag;
+    bool ready = network_ready_count && !network_dma_busy && !data_info[0].dma_stop_flag;
     if(ready) {
-        *descriptor = network_queue[network_head];
-        network_head = (network_head + 1) % NETWORK_DMA_BLOCKS;
-        --network_count;
+        *descriptor = network_ready_queue[network_ready_head];
+        network_ready_head = (network_ready_head + 1) % NETWORK_DMA_BLOCKS;
+        --network_ready_count;
         network_blocks[descriptor->offset / NETWORK_TX_BLOCK_SIZE] = BLOCK_IN_FLIGHT;
         network_dma_busy = true;
     }
@@ -236,6 +264,7 @@ void sgdma_mm2s_start(int chn)
     pthread_mutex_lock(&data_mutex[chn]);
     data_info[chn].dma_stop_flag = 0;
     data_info[chn].dma_flag = 0;
+    pthread_cond_signal(&network_sync_cond);
     pthread_mutex_unlock(&data_mutex[chn]);
 }
 
@@ -922,6 +951,27 @@ static bool network_dma_capture(NetworkDmaCapture& capture, const unsigned char*
 }
 #endif
 
+// Refresh only completed network blocks; never expose an unsynced block to DMA.
+static void* sgdma_network_cache_pthread(void* arg)
+{
+    (void)arg;
+    auto* dma = &data_info[0].sgdma_tx;
+    while(true) {
+        NetworkDescriptor descriptor = network_dma_sync_dequeue();
+        bool sync_error_reported = false;
+        while(do_sync(dma->mem_fd, AXIS_FIFO_SYNC_FOR_DEVICE,
+                      descriptor.offset, descriptor.length, NULL) != 0) {
+            if(!sync_error_reported) {
+                perror("[DMA TX] cache sync failed; retaining block and retrying");
+                sync_error_reported = true;
+            }
+            usleep(10000);
+        }
+        network_dma_sync_publish(descriptor);
+    }
+    return NULL;
+}
+
 static void* sgdma_network_queue_pthread(void* arg)
 {
     auto* dma = &data_info[0].sgdma_tx;
@@ -939,16 +989,6 @@ static void* sgdma_network_queue_pthread(void* arg)
                 return NULL;
             }
 #endif
-            bool sync_error_reported = false;
-            while(do_sync(dma->mem_fd, AXIS_FIFO_SYNC_FOR_DEVICE,
-                          descriptor.offset, descriptor.length, NULL) != 0) {
-                if(!sync_error_reported) {
-                    perror("[DMA TX] cache sync failed; retaining block and retrying");
-                    sync_error_reported = true;
-                }
-                usleep(10000);
-            }
-           // __sync_synchronize();
             mm2s_dma_enable(dma);
             push_mm2s_dma(dma, descriptor.offset, descriptor.length);
             pending = true;
@@ -1007,6 +1047,18 @@ int system_init(void)
             auto worker = sgdma_synthetic_tx_pthread;
 #else
             auto worker = sgdma_network_queue_pthread;
+#endif
+#if !ENABLE_SYNTHETIC_DMA_TX
+            // One cache worker serves the single network DMA ring (channel 0).
+            if(num == 0) {
+                pthread_t cache_tid;
+                ret = pthread_create(&cache_tid, &attr, sgdma_network_cache_pthread, NULL);
+                if(ret != 0) {
+                    printf("[DMA TX] cache worker create error: %d\n", ret);
+                    pthread_attr_destroy(&attr);
+                    return 3;
+                }
+            }
 #endif
             ret = pthread_create(&sgdma_tid[num], &attr, worker, &sgdma_tx_thread_chn[num]);
             if(ret != 0) {

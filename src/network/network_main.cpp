@@ -77,8 +77,7 @@ int NetServer::Init(int port){
         return thread_.Run(&NetServer::ServiceLoop,this,Thread::PRIORITY_HIGH);
     } 
     else if(port == DATA_DOWN_PORT) {
-        if(!daemod_thread_.Run(&NetServer::DaemodLoop,this,Thread::PRIORITY_NORMAL))
-            return -1;
+        // Capacity reporting is disabled; start only the data receive thread.
         return thread_.Run(&NetServer::DataServiceLoop,this,Thread::PRIORITY_NORMAL);
     }
     else
