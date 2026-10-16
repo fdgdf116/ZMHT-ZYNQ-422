@@ -8,11 +8,18 @@
 
 // Force short writes at header boundaries and in the payload, plus EINTR.
 static bool scripted = false;
+static bool timeout_scripted = false;
 static size_t step = 0;
 static unsigned char* mapped_payload;
 static std::vector<unsigned char> scripted_wire;
 extern "C" ssize_t __real_sendmsg(int, const struct msghdr*, int);
 extern "C" ssize_t __wrap_sendmsg(int fd, const struct msghdr* msg, int flags) {
+    if(timeout_scripted) {
+        // A partial header followed by the timeout result must abort the frame.
+        if(step++ == 0) return 7;
+        errno = EAGAIN;
+        return -1;
+    }
     if(!scripted) return __real_sendmsg(fd, msg, flags);
     assert(flags & MSG_NOSIGNAL);
     if(step++ == 0) {
@@ -34,6 +41,18 @@ extern "C" ssize_t __wrap_sendmsg(int fd, const struct msghdr* msg, int flags) {
     return count;
 }
 
+static unsigned int sync_calls = 0;
+static unsigned int sync_offset = 0, sync_size = 0;
+extern "C" int do_sync(int fd, unsigned long cmd, uint32_t off,
+                       uint32_t size, uint64_t*) {
+    assert(fd == 42 && cmd == AXIS_FIFO_SYNC_FOR_CPU);
+    assert(off == sync_offset && size == sync_size);
+    assert(ringbuffer_is_empty(rx_data_info[0].data_stream.dma_data_rb));
+    assert(rx_cache_outstanding == 1);
+    if(++sync_calls == 1) { errno = EIO; return -1; }
+    return 0;
+}
+
 int main() {
     std::vector<unsigned char> memory(17 * RECV_DMA_DATA_SIZE, 0xa5);
     for(size_t i=0; i<RECV_DMA_DATA_SIZE; ++i) memory[i]=(i*17+i/251)&255;
@@ -43,6 +62,23 @@ int main() {
     auto* rb=ringbuffer_create(16*sizeof(image_frame_info_t),sizeof(image_frame_info_t));
     assert(rb);
     rx.data_stream.dma_data_rb=rb;
+    // A completed DMA block stays invisible until CPU cache sync succeeds.
+    rx.sgdma_tx.mem_fd = 42;
+    image_frame_info_t completed = {};
+    completed.frame_offset = RECV_DMA_DATA_SIZE;
+    completed.frame_size = 1234;
+    sync_offset = completed.frame_offset;
+    sync_size = completed.frame_size;
+    rx_cache_reserve();
+    rx_cache_submit(completed);
+    unsigned char* synced = nullptr;
+    assert(rx_sgdma_data_get(0, &synced) == 0);
+    assert(rx_cache_process_one());
+    assert(sync_calls == 2 && rx_cache_outstanding == 1);
+    assert(rx_sgdma_data_get(0, &synced) == 1234);
+    assert(synced == memory.data() + RECV_DMA_DATA_SIZE);
+    assert(rx_cache_outstanding == 0 && !rx_cache_process_one());
+
     for(unsigned int i=0; i<16; ++i) {
         image_frame_info_t frame={};
         frame.frame_size=RECV_DMA_DATA_SIZE;
@@ -116,7 +152,11 @@ int main() {
     network::TcpSocket stalled(sockets[0]);
     stalled.SetSendBUfSize(1024);
     stalled.SetSendTimeout(20);
+    timeout_scripted=true;
+    step=0;
     assert(!stalled.SendVectorFully(packet,2));
+    assert(step==2);
+    timeout_scripted=false;
     stalled.Close();
     close(sockets[1]);
     assert(mock.SendVectorFully(nullptr,0));

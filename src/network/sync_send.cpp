@@ -1,6 +1,7 @@
 #include "sync_send.h"
 #include "fifo_engine.h"
 #include "system.h"
+#include "buffer_control.h"
 
 namespace network {
 
@@ -101,12 +102,14 @@ void SyncSend::DaemodLoop(Thread * thread){
 			}
 		}
 
+        BufferWork work;
+        if(!work) { usleep(1000); continue; }
 		bool did_work = false;
 		bool send_failed = false;
         // Legacy FIFO framing, with a bounded round-robin burst before the
         // next whole DMA frame. Never interrupt a DMA vector send.
         int empty_channels = 0;
-        for(int sent=0; sent<64 && empty_channels<FIFO_NUM;) {
+        for(int sent=0; sent<64 && empty_channels<FIFO_NUM && !buffer_clear_requested();) {
             int fifo_id = next_fifo_id;
             next_fifo_id = (next_fifo_id + 1) % FIFO_NUM;
             unsigned char* fifo_data = nullptr;
@@ -132,7 +135,7 @@ void SyncSend::DaemodLoop(Thread * thread){
             ++sent;
         }
         if(send_failed) continue;
-		for(int dma_id = 0; dma_id < SGDMA_NUM; ++dma_id) {
+		for(int dma_id = 0; dma_id < SGDMA_NUM && !buffer_clear_requested(); ++dma_id) {
 			size = rx_sgdma_data_get(dma_id, ptr);
 			if(size > 0) {
 				did_work = true;

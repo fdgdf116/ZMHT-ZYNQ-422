@@ -44,6 +44,7 @@ private:
 	int SendResponse(ClassResponse *response);
 	void ReportUnknowRequest(Request* request);
 
+	int ClearBuffers(Request *request);
 	int WriteFpgaRegister(Request *request);
 	int ReadFpgaRegister(Request *request);
 	int DDR_Phy_Get(Request *request);

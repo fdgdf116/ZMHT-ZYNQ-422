@@ -24,6 +24,7 @@ struct sgdma_info {
 
 int sgdma_init(int chn_id, const char* devicename,struct dma_addr_info* addr_info, unsigned int dma_data_size, struct sgdma_info *dma_info);
 void sgdma_exit(struct sgdma_info *dma_info);
+int reset_dma_channel(struct sgdma_info* dma, unsigned int control);
 void push_mm2s_dma(struct sgdma_info *dma_info, unsigned int offset, int size);
 void get_s2mm_dma(struct sgdma_info *dma_info, unsigned int offset, int size);
 void mm2s_dma_enable(struct sgdma_info *dma_info);

@@ -20,6 +20,8 @@ void network_dma_received(unsigned int bytes);
 void network_dma_abort_partial(void);
 
 void sgdma_memcpy_data(unsigned char chn_id, unsigned char* data);
+// Quiesces all users; callback disconnects the old downlink before clearing.
+int clear_all_buffers(void (*quiesced)(void*), void* context);
 int system_init(void);
 void system_exit(void);
 int recv_dma_init(void);

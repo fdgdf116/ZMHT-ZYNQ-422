@@ -268,6 +268,13 @@ CMakeFiles/pxie_dma_sample.dir/src/system/system.cpp.o: \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/poll.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/system/system.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/include/common/common.h \
+ /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/buffer_control.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/mutex \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/system_error \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/arm-linux-gnueabihf/bits/error_constants.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/bits/std_mutex.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/condition_variable \
+ /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/fifo_engine.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/dma_buffer_mem.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/zmuav_wrmem.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/ringbuffer.h \

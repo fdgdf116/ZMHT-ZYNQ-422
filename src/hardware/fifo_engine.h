@@ -25,6 +25,7 @@ int fifo_tx_try_memcpy_data(unsigned char chn_id, unsigned char* data, int size)
 void fifo_tx_memcpy_data(unsigned char chn_id, unsigned char* data, int size);
 int axififo_pure_data_send(int fifo_id ,unsigned char* data,int len);
 void axififo_data_destory(void);
+int axififo_clear_buffers(void);
 int axififo_query_capacity(Cache_report_inf_t* capacity);
 
 #ifdef __cplusplus

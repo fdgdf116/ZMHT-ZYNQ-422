@@ -22,6 +22,7 @@
 
 #include "stream_fifo.h"
 #include "fifo_engine.h"
+#include "buffer_control.h"
 #include "ringbuffer.h"
 #include "sync_send.h"
 #include "xutils.h"
@@ -185,6 +186,7 @@ int axififo_pure_data_send(int fifo_id, unsigned char* data,int len)
 
 	send_size = 0;
 	while(1){
+        if(buffer_clear_requested()) return -1;
 		ret = stream_fifo_write_data(&g_axififo_info->fifo_reg[fifo_id],(uint8_t *)(data + send_size),len - send_size);
 		// fwrite(data + send_size, 1, ret, fp_fifo_rx);
 		// fflush(fp_fifo_rx);
@@ -513,6 +515,8 @@ static void *axififo_recv_data_pthread(void* parameter)
 	int recv_cnt;
 	unsigned char RecvBuffer[AXIFIFO_RECV_DATA_SIZE];
 	while(1){
+        BufferWork work;
+        if(!work) { usleep(100); continue; }
 		for(int fifo_id = 0;fifo_id < FIFO_NUM;fifo_id++){
 			int free_slots = fifo_memcpy_rb_avail(fifo_id);
 			/*
@@ -605,6 +609,8 @@ static void *axififo_send_data_pthread(void* parameter)
 	// gettimeofday(&start, NULL);
 	while (1)
 	{
+        BufferWork work;
+        if(!work) { usleep(100); continue; }
 		for(int chn_id = 0;chn_id < FIFO_NUM;chn_id++){
 			struct fifo_data_info_t *fifo_data_info = &g_axififo_info->fifo_tx_data_info[chn_id];
 			u_int8_t* data = NULL;
@@ -867,4 +873,26 @@ int axififo_query_capacity(Cache_report_inf_t* capacity)
 		capacity[chn_id].axififo_space = ringbuff_num*AXI_FIFO_BUF_UNIT_SIZE;
 	}
 	return 0;
+}
+
+// Caller holds exclusive buffer access and has stopped network producers.
+int axififo_clear_buffers(void)
+{
+    if(!g_axififo_info) return -1;
+    for(int ch = 0; ch < FIFO_NUM; ++ch) {
+        if(!g_axififo_info->fifo_reg[ch].cfg) return -1;
+        stream_fifo_reset(&g_axififo_info->fifo_reg[ch]);
+        fifo_data_info_t* buffers[] = {&g_axififo_info->fifo_data_info[ch],
+                                      &g_axififo_info->fifo_tx_data_info[ch]};
+        for(auto* fifo : buffers) {
+            if(!fifo->data || !fifo->fifo_data_rb) return -1;
+            memset(fifo->data, 0, fifo->map_size);
+            ringbuffer_reset(fifo->fifo_data_rb);
+            memset(fifo->fifo_data_rb->data, 0,
+                   ringbuffer_cap(fifo->fifo_data_rb) * fifo->fifo_data_rb->esize);
+            fifo->ringbuf_offset = fifo->ringbuf_count = fifo->done_count = 0;
+            fifo->dma_offset = fifo->dma_size = fifo->dma_flag = fifo->dma_stop_flag = 0;
+        }
+    }
+    return 0;
 }

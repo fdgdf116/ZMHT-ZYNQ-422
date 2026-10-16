@@ -23,6 +23,7 @@
 #include "common.h"
 #include "dma_utils.h"
 #include "dma_buffer_mem.h"
+#include "zmuav_pl2ps_irq.h"
 
 int sgdma_init(int chn_id, const char* devicename, struct dma_addr_info* addr_info,
                unsigned int dma_data_size, struct sgdma_info* dma_info)
@@ -300,3 +301,20 @@ int SendDmaInfo(dma_info_packet* info, struct sgdma_info *dma_info)
 
 #endif
 
+
+int reset_dma_channel(struct sgdma_info* dma, unsigned int control)
+{
+    if(!dma || !dma->dma_base_addr || (control != 0 && control != 0x30)) return -1;
+    volatile int* regs = dma->dma_base_addr;
+    regs[control / 4] = 4;
+    for(unsigned int n = 0; n < 1000; ++n) {
+        if(!(regs[control / 4] & 4)) {
+            regs[(control + 4) / 4] = 0x7000;
+            unsigned int count = 0;
+            return ioctl(dma->fd, ZMUAV_PL2PS_IRQ_CLEAN_IRQ_COUNT, &count);
+        }
+        usleep(1000);
+    }
+    errno = ETIMEDOUT;
+    return -1;
+}

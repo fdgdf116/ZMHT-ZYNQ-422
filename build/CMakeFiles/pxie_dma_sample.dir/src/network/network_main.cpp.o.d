@@ -287,6 +287,11 @@ CMakeFiles/pxie_dma_sample.dir/src/network/network_main.cpp.o: \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/network/tcp_socket.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/sys/uio.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/libc/usr/include/bits/uio-ext.h \
+ /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/hardware/buffer_control.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/atomic \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/mutex \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/bits/std_mutex.h \
+ /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/condition_variable \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/network/n_event.h \
  /home/wang/ZMHT-Project/ZMHT-ZYNQ-422/src/network/singleton.h \
  /home/wang/ZMHT-Tool/gcc-arm-linux-gnueabi/arm-linux-gnueabihf/include/c++/7.2.1/queue \

@@ -4,6 +4,7 @@
 #include <time.h>
 #include <poll.h>
 #include "network_main.h"
+#include "buffer_control.h"
 #include "n_event.h"
 #include "fifo_engine.h"
 #include "system.h"
@@ -26,7 +27,9 @@ static inline uint64_t htonll(uint64_t host64) {
 #define NETWORK_RECV_CHUNK_SIZE (256u * 1024u)
 
 namespace network {
+static std::atomic<NetServer*> buffer_data_server{nullptr};
 NetServer::AnswerMapEntry NetServer::mapEntry_[] = {
+        { (unsigned short)0xff06, &NetServer::ClearBuffers },
         { (unsigned short)0x0201, &NetServer::NetDmaMM2SControl },
 #if ENABLE_1553B
         { (unsigned short)0x0300, &NetServer::Send1553BData },
@@ -131,6 +134,7 @@ static bool data_peer_closed(TcpSocket* connection) {
 }
 
 void NetServer::DataServiceLoop(Thread *thread){
+    buffer_data_server.store(this);
     unsigned char* buffer = network_rx_dma_buffer();
     if(!buffer) {
         fprintf(stderr, "[NET 9016 RX] 32 MiB DMA mapping unavailable\n");
@@ -149,6 +153,7 @@ void NetServer::DataServiceLoop(Thread *thread){
             MutexScopedLocker locker(data_client_mutex_);
             client_data_ = connection;
         }
+        unsigned long connection_epoch = buffer_epoch();
         Request header = {};
         static_assert(sizeof(Request) == 16, "9016 request header must be 16 bytes");
         unsigned int header_received = 0;
@@ -162,6 +167,9 @@ void NetServer::DataServiceLoop(Thread *thread){
         unsigned int fifo_filled = 0;
         bool socket_readable = false;
         while(!thread_.IsInterrupted()) {
+            BufferWork work;
+            if(!work) { usleep(1000); continue; }
+            if(connection_epoch != buffer_epoch()) break;
             // Receive the entire FIFO request before publishing any chunk.
             // Keep the completed request while a full queue applies backpressure.
             if(fifo_request && body_remaining == 0 && fifo_enqueued < fifo_filled) {
@@ -292,7 +300,10 @@ void NetServer::DataServiceLoop(Thread *thread){
                 } else if(fd.revents & (POLLERR | POLLHUP | POLLNVAL)) break;
             }
         }
-        network_dma_abort_partial();
+        {
+            BufferWork work;
+            if(work && connection_epoch == buffer_epoch()) network_dma_abort_partial();
+        }
         // Interrupt an outstanding report send before waiting for its lock.
         shutdown(connection->GetSocketId(), SHUT_RDWR);
         {
@@ -415,6 +426,31 @@ int NetServer::SendResponse(ClassResponse *response){
     SendResponse(res);
     return 0;
 }
+int NetServer::ClearBuffers(Request* request)
+{
+    uint32_t token = 0;
+    if(request->length == sizeof(token)) memcpy(&token, request + 1, sizeof(token));
+    uint32_t result = 0;
+    if(request->length == sizeof(token) && ntohl(token) == 0xAAAAAAAAU) {
+        int cleared = clear_all_buffers([](void*) {
+            auto* server = buffer_data_server.load();
+            if(!server) return;
+            MutexScopedLocker lock(server->data_client_mutex_);
+            if(server->client_data_) shutdown(server->client_data_->GetSocketId(), SHUT_RDWR);
+        }, nullptr);
+        if(cleared == 0) result = 0xBBBBBBBBU;
+        else fprintf(stderr, "[BUFFER CLEAR] failed; buffer workers remain paused if clearing started\n");
+    }
+    ClassResponse response(sizeof(result));
+    response.WriteType(0xff06);
+    response.WriteCount(ntohs(request->count));
+    result = htonl(result);
+    response.WritePayload(&result, 0, sizeof(result));
+    // A clear acknowledgement must be sent completely, including short writes.
+    struct iovec packet = {response.GetResponse(), sizeof(Response) + sizeof(result)};
+    return client_ && client_->SendVectorFully(&packet, 1) ? 0 : -1;
+}
+
 void NetServer::ReportUnknowRequest(Request* request){
     printf("1.ReportUnknowRequest 0x%x \n", request->index);
     ClassRequest Request_t(request);

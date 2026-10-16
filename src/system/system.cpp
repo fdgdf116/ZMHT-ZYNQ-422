@@ -25,6 +25,8 @@
 #include <termios.h>
 
 #include "system.h"
+#include "buffer_control.h"
+#include "fifo_engine.h"
 #include "dma_buffer_mem.h"
 #include "zmuav_wrmem.h"
 #include "ringbuffer.h"
@@ -104,6 +106,73 @@ static unsigned int rx_dma_phy_addr[SGDMA_NUM] = {0xa2000000};
 static struct sgdma_data_info data_info[SGDMA_NUM];
 static struct sgdma_data_info rx_data_info[SGDMA_NUM];
 static unsigned int sgdma_tx_thread_chn[SGDMA_NUM];
+
+// One shared credit limit covers pending sync, syncing and upload-ready blocks.
+// Keep the 17th mapped block for the sole uploader's current frame.
+static pthread_mutex_t rx_cache_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t rx_cache_cond = PTHREAD_COND_INITIALIZER;
+static image_frame_info_t rx_cache_pending[DMARX_DATA_PKG_MAX_L];
+static unsigned int rx_cache_head = 0, rx_cache_tail = 0;
+static unsigned int rx_cache_count = 0, rx_cache_outstanding = 0;
+
+static bool rx_cache_reserve(void)
+{
+    pthread_mutex_lock(&rx_cache_mutex);
+    if(rx_cache_outstanding == DMARX_DATA_PKG_MAX_L) {
+        pthread_mutex_unlock(&rx_cache_mutex);
+        return false;
+    }
+    ++rx_cache_outstanding;
+    pthread_mutex_unlock(&rx_cache_mutex);
+    return true;
+}
+
+static void rx_cache_submit(const image_frame_info_t& frame)
+{
+    pthread_mutex_lock(&rx_cache_mutex);
+    rx_cache_pending[rx_cache_tail] = frame;
+    rx_cache_tail = (rx_cache_tail + 1) % DMARX_DATA_PKG_MAX_L;
+    ++rx_cache_count;
+    pthread_cond_broadcast(&rx_cache_cond);
+    pthread_mutex_unlock(&rx_cache_mutex);
+}
+
+static bool rx_cache_process_one(void)
+{
+    pthread_mutex_lock(&rx_cache_mutex);
+    if(!rx_cache_count) {
+        pthread_mutex_unlock(&rx_cache_mutex);
+        return false;
+    }
+    image_frame_info_t frame = rx_cache_pending[rx_cache_head];
+    rx_cache_head = (rx_cache_head + 1) % DMARX_DATA_PKG_MAX_L;
+    --rx_cache_count;
+    pthread_mutex_unlock(&rx_cache_mutex);
+    auto* dma = &rx_data_info[0].sgdma_tx;
+    bool reported = false;
+    while(do_sync(dma->mem_fd, AXIS_FIFO_SYNC_FOR_CPU,
+                  frame.frame_offset, frame.frame_size, NULL) != 0) {
+        if(buffer_clear_requested()) return false;
+        if(!reported) {
+            perror("[DMA RX] cache sync failed; retaining block and retrying");
+            reported = true;
+        }
+        usleep(10000);
+    }
+    pthread_mutex_lock(&rx_cache_mutex);
+    ringbuffer_put(rx_data_info[0].data_stream.dma_data_rb, &frame, sizeof(frame));
+    pthread_mutex_unlock(&rx_cache_mutex);
+    return true;
+}
+
+static void* sgdma_rx_cache_pthread(void*)
+{
+    while(true) {
+        BufferWork work;
+        if(!work || !rx_cache_process_one()) usleep(100);
+    }
+    return NULL;
+}
 
 // Exclusive receive benchmark access; unavailable if local DMA sending is enabled.
 unsigned char* network_rx_dma_buffer(void)
@@ -192,8 +261,10 @@ void network_dma_abort_partial(void)
 static NetworkDescriptor network_dma_sync_dequeue()
 {
     pthread_mutex_lock(&data_mutex[0]);
-    while(!network_count || data_info[0].dma_stop_flag)
-        pthread_cond_wait(&network_sync_cond, &data_mutex[0]);
+    if(!network_count || data_info[0].dma_stop_flag) {
+        pthread_mutex_unlock(&data_mutex[0]);
+        return {};
+    }
     NetworkDescriptor descriptor = network_queue[network_head];
     network_head = (network_head + 1) % NETWORK_DMA_BLOCKS;
     --network_count;
@@ -342,31 +413,19 @@ int sgdma_vfifo_query_capacity(Cache_report_inf_t* capacity)
 
 int rx_sgdma_data_get(unsigned char chn_id, u_int8_t** data)
 {
-	image_frame_info_t frame_info;
-	struct sgdma_info *sgdma_rx;
-	ring_buffer_t *rb;
-	int len = 0;
-	static unsigned long ringbuffer_full_cnt = 0;
-
-	sgdma_rx = &rx_data_info[chn_id].sgdma_tx;
-	rb = rx_data_info[chn_id].data_stream.dma_data_rb;
-	if(ringbuffer_is_empty(rb)) {
-		if((ringbuffer_full_cnt % 10000) == 0){
-			// printf("dma%d ringbuffer empty cnt:%ld \n", chn_id, ringbuffer_full_cnt);
-		}
-		usleep(10);
-		ringbuffer_full_cnt += 1;
-		return 0;
-	}
-	ringbuffer_get(rb, (uint8_t *)&frame_info, sizeof(frame_info));
-	*data = sgdma_rx->mem_vir_base + frame_info.frame_offset;
-    if(*data == NULL)
-    {
-        printf("data is empty\n");
+    if(chn_id >= SGDMA_NUM || !data) return 0;
+    image_frame_info_t frame_info;
+    pthread_mutex_lock(&rx_cache_mutex);
+    auto* rb = rx_data_info[chn_id].data_stream.dma_data_rb;
+    if(!rb || !ringbuffer_get(rb, &frame_info, sizeof(frame_info))) {
+        pthread_mutex_unlock(&rx_cache_mutex);
         return 0;
     }
-	
-	return frame_info.frame_size;
+    if(rx_cache_outstanding) --rx_cache_outstanding;
+    pthread_cond_broadcast(&rx_cache_cond);
+    pthread_mutex_unlock(&rx_cache_mutex);
+    *data = rx_data_info[chn_id].sgdma_tx.mem_vir_base + frame_info.frame_offset;
+    return frame_info.frame_size;
 }
 
 void rx_sgdma_memcpy_data(unsigned char chn_id, unsigned int data_szie)
@@ -957,17 +1016,21 @@ static void* sgdma_network_cache_pthread(void* arg)
     (void)arg;
     auto* dma = &data_info[0].sgdma_tx;
     while(true) {
+        BufferWork work;
+        if(!work) { usleep(100); continue; }
         NetworkDescriptor descriptor = network_dma_sync_dequeue();
+        if(!descriptor.length) { usleep(100); continue; }
         bool sync_error_reported = false;
         while(do_sync(dma->mem_fd, AXIS_FIFO_SYNC_FOR_DEVICE,
                       descriptor.offset, descriptor.length, NULL) != 0) {
+            if(buffer_clear_requested()) break;
             if(!sync_error_reported) {
                 perror("[DMA TX] cache sync failed; retaining block and retrying");
                 sync_error_reported = true;
             }
             usleep(10000);
         }
-        network_dma_sync_publish(descriptor);
+        if(!buffer_clear_requested()) network_dma_sync_publish(descriptor);
     }
     return NULL;
 }
@@ -980,7 +1043,11 @@ static void* sgdma_network_queue_pthread(void* arg)
     NetworkDmaCapture capture;
 #endif
     bool pending = false;
+    unsigned long epoch = buffer_epoch();
     while(true) {
+        BufferWork work;
+        if(!work) { usleep(100); continue; }
+        if(epoch != buffer_epoch()) { pending = false; epoch = buffer_epoch(); }
         if(!pending && network_dma_dequeue(&descriptor)) {
 #if ENABLE_NETWORK_DMA_SD_CAPTURE
             if(!network_dma_capture(capture, dma->mem_vir_base + descriptor.offset,
@@ -1139,13 +1206,10 @@ static void *zmuav_pl2ps_irq_recv_pthread(void* parameter)
 	image_frame_info_t frame_info;
 	int data_szie = RECV_DMA_DATA_SIZE;
 
-	ring_buffer_t *rb;
 	unsigned char* dma_addr = NULL;
-	unsigned long ringbuffer_full_cnt = 0;
 	unsigned int last1_done_count = 0;
 	u_int8_t* data = (u_int8_t*)malloc(data_szie);
 	sgdma_rx = &rx_data_info[0].sgdma_tx;
-	rb = rx_data_info[0].data_stream.dma_data_rb;
 	unsigned int frame_cnt = 0;
 	FILE *fp = fopen("/tmp/dma_addr.raw", "wb+");
 
@@ -1153,24 +1217,24 @@ static void *zmuav_pl2ps_irq_recv_pthread(void* parameter)
 	double elapsed;
 	struct timeval start, end;
     while (1) {
+        BufferWork work;
+        if(!work) { usleep(100); continue; }
 		if(rx_data_info[0].ringbuf_offset + RECV_DMA_DATA_SIZE > sgdma_rx->map_size){
 			rx_data_info[0].ringbuf_offset = 0;
 		}
-		while (ringbuffer_is_full(rb))
-		{
-			ringbuffer_full_cnt++;
-			if(ringbuffer_full_cnt >= 40000){
-				printf("[%s]ringbuffer is full.!!!!!!!!!!\n", __func__);
-				ringbuffer_full_cnt = 0;
-			}
-			/* Keep all queued frames and let the 9014 sender release a slot. */
-			usleep(50);
-		}
-		
+		if(!rx_cache_reserve()) { usleep(100); continue; }
 
 		int recv_count = data_szie;
 		if(recv_count != 0) {
 			gettimeofday(&start, NULL);
+            // Return ownership to the device before reusing a CPU-read block.
+            while(do_sync(sgdma_rx->mem_fd, AXIS_FIFO_SYNC_FOR_DEVICE,
+                          rx_data_info[0].ringbuf_offset, data_szie, NULL) != 0) {
+                if(buffer_clear_requested()) break;
+                perror("[DMA RX] prepare device cache failed; retrying");
+                usleep(10000);
+            }
+            if(buffer_clear_requested()) continue;
 			s2mm_dma_enable(sgdma_rx);
 			get_s2mm_dma(sgdma_rx,rx_data_info[0].ringbuf_offset,data_szie);
 			unsigned int wait_timeout_count = 0;
@@ -1188,19 +1252,22 @@ static void *zmuav_pl2ps_irq_recv_pthread(void* parameter)
 						wait_timeout_count = 0;
 					}
 				}
-			} while(ret == 0);
+			} while(ret == 0 && !buffer_clear_requested());
+            if(buffer_clear_requested()) continue;
 			if(ret > 0)
 			{
 				recv_count = getdatacount(sgdma_rx);
-				if((recv_count>RECV_DMA_DATA_SIZE) && (recv_count%0x400 != 0)){
-					printf("recv recv_count:0x%x err.!!!!!!!!!!",recv_count);
+				if(recv_count <= 0 || recv_count > RECV_DMA_DATA_SIZE){
+					printf("[DMA RX] invalid length:0x%x; stopping receiver\n",recv_count);
+                    s2mm_dma_disable(sgdma_rx);
+                    return NULL;
 				}
 				// printf("[%s %d]recv_count:0x%x\n",__func__,__LINE__,recv_count);
 				dma_addr = sgdma_rx->mem_vir_base + rx_data_info[0].ringbuf_offset;
 				//计算DmaSend发送耗时，精确到us
 				frame_info.frame_offset = rx_data_info[0].ringbuf_offset;
 				frame_info.frame_size = recv_count;
-				pcie_data_to_queue(rb, &frame_info);
+				rx_cache_submit(frame_info);
 				// gettimeofday(&end, NULL);
 				// seconds = end.tv_sec - start.tv_sec;
 				// microseconds = end.tv_usec - start.tv_usec;
@@ -1415,6 +1482,13 @@ int recv_dma_init(void)
 		return 3;
 	}
 #else
+    pthread_t cache_tid;
+    ret = pthread_create(&cache_tid, &attr, sgdma_rx_cache_pthread, NULL);
+    if(ret != 0) {
+        printf("[DMA RX] cache worker create error: %d\n", ret);
+        pthread_attr_destroy(&attr);
+        return 3;
+    }
 	ret = pthread_create(&recv_tid, &attr, zmuav_pl2ps_irq_recv_pthread, NULL);
     if (ret != 0) {
         printf("irq recv pthread_create error \n");
@@ -1422,5 +1496,66 @@ int recv_dma_init(void)
     }
 #endif
 	pthread_attr_destroy(&attr);
+    return 0;
+}
+
+int clear_all_buffers(void (*quiesced)(void*), void* context)
+{
+    if(LOCAL_DMA_BENCHMARK_ENABLED || DATA_PORT_BENCHMARK_MODE) return -1;
+    auto& control = buffer_control();
+    std::lock_guard<std::mutex> serialize(control.clear_mutex);
+    {
+        std::unique_lock<std::mutex> lock(control.mutex);
+        control.clearing.store(true);
+        if(!control.idle.wait_for(lock, std::chrono::seconds(5),
+                                  [&] { return control.active == 0; })) return -1;
+    }
+    if(quiesced) quiesced(context);
+    auto* tx = &data_info[0].sgdma_tx;
+    auto* rx = &rx_data_info[0].sgdma_tx;
+    // On any failure remain paused: never acknowledge a successful clear or
+    // resume DMA against partially cleared / unsynchronized memory.
+    if(!tx->mem_vir_base || !rx->mem_vir_base ||
+       tx->mem_vir_base == MAP_FAILED || rx->mem_vir_base == MAP_FAILED ||
+       !data_info[0].data_stream.dma_data_rb || !rx_data_info[0].data_stream.dma_data_rb ||
+       reset_dma_channel(tx, 0) || reset_dma_channel(rx, 0x30)) return -1;
+    if(do_sync(rx->mem_fd, AXIS_FIFO_SYNC_FOR_CPU, 0, rx->map_size, NULL)) return -1;
+    memset(tx->mem_vir_base, 0, tx->map_size);
+    memset(rx->mem_vir_base, 0, rx->map_size);
+    if(do_sync(tx->mem_fd, AXIS_FIFO_SYNC_FOR_DEVICE, 0, tx->map_size, NULL) ||
+       do_sync(rx->mem_fd, AXIS_FIFO_SYNC_FOR_DEVICE, 0, rx->map_size, NULL) ||
+       axififo_clear_buffers()) return -1;
+
+    pthread_mutex_lock(&data_mutex[0]);
+    memset(network_blocks, 0, sizeof(network_blocks));
+    memset(network_queue, 0, sizeof(network_queue));
+    memset(network_ready_queue, 0, sizeof(network_ready_queue));
+    network_head = network_tail = network_count = 0;
+    network_ready_head = network_ready_tail = network_ready_count = 0;
+    network_cursor = network_filled = 0;
+    network_filling = -1;
+    network_dma_busy = false;
+    data_info[0].ringbuf_offset = data_info[0].ringbuf_count = data_info[0].done_count = 0;
+    data_info[0].dma_offset = data_info[0].dma_size = data_info[0].dma_flag = 0;
+    auto* tx_rb = data_info[0].data_stream.dma_data_rb;
+    ringbuffer_reset(tx_rb);
+    memset(tx_rb->data, 0, ringbuffer_cap(tx_rb) * tx_rb->esize);
+    pthread_mutex_unlock(&data_mutex[0]);
+
+    pthread_mutex_lock(&rx_cache_mutex);
+    memset(rx_cache_pending, 0, sizeof(rx_cache_pending));
+    rx_cache_head = rx_cache_tail = rx_cache_count = rx_cache_outstanding = 0;
+    rx_data_info[0].ringbuf_offset = rx_data_info[0].ringbuf_count = rx_data_info[0].done_count = 0;
+    rx_data_info[0].dma_offset = rx_data_info[0].dma_size = rx_data_info[0].dma_flag = 0;
+    auto* rx_rb = rx_data_info[0].data_stream.dma_data_rb;
+    ringbuffer_reset(rx_rb);
+    memset(rx_rb->data, 0, ringbuffer_cap(rx_rb) * rx_rb->esize);
+    pthread_mutex_unlock(&rx_cache_mutex);
+    {
+        std::lock_guard<std::mutex> lock(control.mutex);
+        ++control.epoch;
+        control.clearing.store(false);
+    }
+    printf("[BUFFER CLEAR] DMA TX/RX and %d FIFO TX/RX buffers cleared\n", FIFO_NUM);
     return 0;
 }
